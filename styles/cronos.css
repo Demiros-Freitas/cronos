@@ -1,0 +1,167 @@
+/* Cronos · relógio, calendário e configuração (mesma paleta do Atlas) */
+#cronos-clock{--bg:#14171c;--p2:#1c2028;--ln:#2e333d;--tx:#ece6d6;--mu:#aaa395;--gold:#e2b964;--gold2:#f3d08a;--ink:#1b1610;
+  position:fixed;left:50%;top:84px;transform:translateX(-50%);z-index:60;display:flex;align-items:center;gap:10px;padding:6px 10px 6px 4px;background:rgba(20,23,28,.94);border:1px solid var(--ln);border-radius:12px;box-shadow:0 8px 22px rgba(0,0,0,.5);color:var(--tx);font:13px "IBM Plex Sans","Signika",sans-serif;user-select:none}
+#cronos-clock .cr-grip{cursor:grab;color:var(--mu);padding:0 2px;letter-spacing:-2px}
+#cronos-clock .cr-main{display:flex;flex-direction:column;min-width:0}
+#cronos-clock .cr-date{font:600 13px "Cinzel","Signika",serif;color:var(--gold2);white-space:nowrap}
+#cronos-clock .cr-sub{font-size:11px;color:var(--mu);display:flex;align-items:center;gap:4px;white-space:nowrap}
+#cronos-clock .cr-moon svg{vertical-align:middle}
+#cronos-clock .cr-time{display:flex;flex-direction:column;align-items:center;gap:3px;padding:0 6px;border-left:1px solid var(--ln);border-right:1px solid var(--ln)}
+#cronos-clock .cr-time b{font:700 18px "IBM Plex Mono","Consolas",monospace;letter-spacing:.02em}
+#cronos-clock .cr-dayline{display:block;width:64px;height:3px;border-radius:2px;background:linear-gradient(90deg,#1b2440,#e8b65a 50%,#1b2440);opacity:.6;position:relative}
+#cronos-clock .cr-dayline i{position:absolute;left:0;top:-2px;height:7px;border-right:2px solid #fff}
+#cronos-clock .cr-ctrl,#cronos-clock .cr-side{display:flex;align-items:center;gap:3px}
+#cronos-clock button,#cronos-clock select{height:28px;min-width:28px;padding:0 6px;border-radius:6px;border:1px solid var(--ln);background:var(--p2);color:var(--tx);font-size:12px;cursor:pointer;line-height:1}
+#cronos-clock select{width:auto;padding:0 4px}
+#cronos-clock button:hover{border-color:#4a505c}
+#cronos-clock .cr-play{min-width:36px;font-size:14px;background:var(--gold);color:var(--ink);border-color:var(--gold)}
+#cronos-clock .cr-play.on{background:#2a1d18;color:#f2c2b4;border-color:#6a3a2c}
+.cronos-panel{--bg:#14171c;--p2:#1c2028;--ln:#2e333d;--tx:#ece6d6;--mu:#aaa395;--gold:#e2b964;--gold2:#f3d08a;--ink:#1b1610;
+  position:fixed;left:50%;top:140px;transform:translateX(-50%);z-index:61;width:min(440px,92vw);max-height:calc(100vh - 170px);display:flex;flex-direction:column;background:var(--bg);border:1px solid var(--ln);border-radius:12px;box-shadow:0 14px 40px rgba(0,0,0,.6);color:var(--tx);font:13px "IBM Plex Sans","Signika",sans-serif}
+.cronos-panel header{display:flex;align-items:center;gap:8px;padding:9px 12px;border-bottom:1px solid var(--ln)}
+.cronos-panel header b{flex:1;font:700 14px "Cinzel",serif;color:var(--gold2)}
+.cronos-panel header button,.cronos-panel button{height:28px;padding:0 9px;border-radius:6px;border:1px solid var(--ln);background:var(--p2);color:var(--tx);cursor:pointer;font-size:12px;line-height:1}
+.cronos-panel button.gold{background:var(--gold);color:var(--ink);border-color:var(--gold);font-weight:600}
+.cronos-panel .cp-body{padding:10px 12px 12px;overflow:auto;display:flex;flex-direction:column;gap:8px}
+.cronos-panel input,.cronos-panel select{height:28px;background:#0f1216;border:1px solid var(--ln);color:var(--tx);border-radius:6px;padding:0 7px;font-size:12.5px}
+.cronos-panel label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--mu)}
+.cronos-panel small,.cronos-panel .muted{color:var(--mu);font-size:11px}
+.cronos-panel .grow{flex:1;min-width:0}
+.cc-nav{display:flex;align-items:center;gap:6px}.cc-nav b{font:700 16px "Cinzel",serif;color:var(--gold2)}.cc-nav span{color:var(--mu)}
+.cc-wd{display:grid;grid-template-columns:repeat(7,1fr);gap:3px;font-size:10.5px;color:var(--mu);text-align:center;text-transform:uppercase;letter-spacing:.06em}
+.cc-wd{grid-template-columns:repeat(auto-fit,minmax(0,1fr))}
+.cc-grid{display:grid;gap:3px}
+.cc-grid .cc-d{position:relative;height:44px;padding:3px 4px;display:flex;flex-direction:column;align-items:flex-start;justify-content:space-between;background:var(--p2);border:1px solid transparent;border-radius:6px}
+.cc-grid .cc-d b{font-size:12px}
+.cc-grid .cc-d.now{border-color:var(--gold);background:#2b2617}
+.cc-grid .cc-d.sel{box-shadow:inset 0 0 0 2px var(--gold2)}
+.cc-grid .cc-mo{position:absolute;right:3px;top:3px}
+.cc-grid .cc-ev{font-style:normal;color:var(--gold);font-size:14px;line-height:6px;letter-spacing:1px}
+.cc-day{border-top:1px solid var(--ln);padding-top:8px;display:flex;flex-direction:column;gap:6px}
+.cc-dh{display:flex;align-items:center;gap:8px}.cc-dh b{flex:1;color:var(--gold2)}
+.cc-evt{display:flex;gap:8px;align-items:flex-start;padding:6px 8px;background:var(--p2);border-radius:6px;border-left:3px solid var(--gold)}
+.cc-evt small{display:block;margin-top:2px}
+.cc-evt .tag{font-size:10px;padding:1px 6px;border-radius:8px;background:#2e2615;color:var(--gold2)}.cc-evt .tag.rep{background:#1b2a1d;color:#b9e0b2}.cc-evt .tag.gm{background:#2a1d18;color:#f2c2b4}
+.cc-add{display:grid;grid-template-columns:1fr 1fr;gap:6px;align-items:center}.cc-add label{flex-direction:row;align-items:center;gap:4px}.cc-add input[name=title]{grid-column:span 2}.cc-add button{grid-column:span 2}
+#cronos-cfg{width:min(560px,94vw)}
+#cronos-cfg h4{margin:6px 0 0;font-size:11px;color:#8f939b;text-transform:uppercase;letter-spacing:.1em;border-bottom:1px solid var(--ln);padding-bottom:3px}
+.cf-presets{display:flex;flex-wrap:wrap;gap:4px;align-items:center;font-size:11px;color:var(--mu)}
+.cf-row{display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap}.cf-row label{flex:1}
+.cf-months,.cf-seasons{display:flex;flex-direction:column;gap:4px}
+.cf-m{display:flex;gap:6px;align-items:center}.cf-m input:first-child{flex:1}.cf-m input[type=number]{width:64px}.cf-m label{flex-direction:row;align-items:center;gap:3px;white-space:nowrap}
+.cf-chk{flex-direction:row !important;align-items:center;gap:6px;color:var(--tx) !important;font-size:12.5px !important}
+.cf-foot{display:flex;justify-content:flex-end;gap:6px;border-top:1px solid var(--ln);padding-top:8px}
+/* ---------- 1.1: mostrador redondo do céu e controles em duas linhas ---------- */
+#cronos-clock{align-items:center;gap:10px;padding:8px 12px 8px 8px}
+#cronos-clock .cr-dial{position:relative;width:74px;height:74px;flex:0 0 74px;border-radius:50%;cursor:pointer;box-shadow:0 0 0 2px #2e333d,0 0 0 3px rgba(226,185,100,.55),0 4px 14px rgba(0,0,0,.6),inset 0 0 12px rgba(0,0,0,.6);overflow:hidden;background:#0b0f1a}
+#cronos-clock .cr-dsky,#cronos-clock .cr-dsky svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+#cronos-clock .cr-dring{position:absolute;inset:0;border-radius:50%;pointer-events:none;background:radial-gradient(circle,transparent 62%,rgba(0,0,0,.35) 100%);box-shadow:inset 0 0 0 1px rgba(255,255,255,.08)}
+#cronos-clock .cr-dhand{position:absolute;left:50%;top:50%;width:2px;height:34px;margin-left:-1px;transform-origin:50% 0;pointer-events:none}
+#cronos-clock .cr-dhand::after{content:"";position:absolute;left:-3px;bottom:-3px;width:8px;height:8px;border-radius:50%;background:#f3d08a;box-shadow:0 0 6px #f3d08a}
+#cronos-clock .cr-mid{display:flex;flex-direction:column;gap:2px;min-width:170px}
+#cronos-clock .cr-sub{gap:0}
+#cronos-clock .cr-sub .cr-moons{display:inline-flex;gap:3px;margin-left:6px}
+#cronos-clock .cr-timeRow{display:flex;align-items:baseline;gap:8px}
+#cronos-clock .cr-timeRow .cr-clock{font:700 20px "IBM Plex Mono","Consolas",monospace;color:var(--tx);letter-spacing:.02em}
+#cronos-clock .cr-live{font-size:11px;color:var(--gold2)}
+#cronos-clock .cr-live.paused{color:#e59a8a}
+#cronos-clock .cr-ctrl{display:flex;flex-direction:column;gap:4px;border-left:1px solid var(--ln);padding-left:10px}
+#cronos-clock .cr-row{display:flex;gap:4px;align-items:center}
+#cronos-clock .cr-row select{flex:1 1 auto;min-width:86px}
+/* ---------- 1.2: sempre no centro (em cima ou embaixo), largura automática ---------- */
+#cronos-clock{top:6px;transform:translateX(-50%);box-sizing:border-box;justify-content:space-between;--dial:74px}
+#cronos-clock.bottom{top:auto;bottom:74px}
+#cronos-clock .cr-dial{width:var(--dial);height:var(--dial);flex:0 0 var(--dial)}
+#cronos-clock .cr-dhand{height:calc(var(--dial) / 2 - 3px)}
+#cronos-clock .cr-mid{flex:1 1 auto;min-width:0}
+#cronos-clock .cr-date{overflow:hidden;text-overflow:ellipsis}
+#cronos-clock.wide .cr-date{font-size:15px}
+#cronos-clock.wide .cr-timeRow .cr-clock{font-size:24px}
+#cronos-clock .cr-ctrl{flex:0 0 auto}
+#cronos-clock .cr-bar{flex:1 1 auto;min-width:0;height:64px;border-radius:10px;overflow:hidden;cursor:pointer;align-self:center}
+#cronos-clock .cr-bar.empty{display:none}
+#cronos-clock .cr-bar svg{display:block}
+#cronos-clock:not(.wide) .cr-bar{display:none}
+#cronos-clock .cr-mid{flex:0 1 auto}
+
+/* faixa do céu do Atlas dentro do relógio */
+#cronos-clock .cr-bar .skybar{position:relative;height:64px;border-radius:10px;box-shadow:0 6px 18px rgba(0,0,0,.5),inset 0 0 0 1px rgba(232,217,168,.25);overflow:hidden}
+#cronos-clock .cr-bar .skybar svg{display:block}
+#cronos-clock .cr-bar .skybar .sb-l,#cronos-clock .cr-bar .skybar .sb-r{position:absolute;bottom:0;font:700 10px "Cinzel",serif;color:#e8d9a8;opacity:.8}
+#cronos-clock .cr-bar .skybar .sb-l{left:6px}.skybar .sb-r{right:6px}
+#cronos-clock .cr-bar .skybar .sb-t{position:absolute;left:50%;bottom:0;transform:translateX(-50%);font:600 10.5px "IBM Plex Sans",sans-serif;color:#ece6d6;text-shadow:0 1px 2px #000;white-space:nowrap}
+#cronos-clock .cr-bar .skybar .sb-m{position:absolute;right:8px;top:4px;font:600 10px "IBM Plex Sans",sans-serif;color:#eef;text-shadow:0 1px 2px #000;white-space:nowrap}
+#cronos-clock .cr-bar .skybar .skmoon-d{fill:#1b2030;stroke:#3a4160;stroke-width:1px}
+#cronos-clock .cr-bar .skybar .sbcloud{animation-name:sbdrift;animation-timing-function:linear;animation-iteration-count:infinite}
+@keyframes sbdrift{from{transform:translateX(-60px)}to{transform:translateX(60px)}}
+#cronos-clock .cr-bar .skybar{box-shadow:inset 0 0 0 1px rgba(232,217,168,.25)}
+#cronos-clock{justify-content:flex-start}
+#cronos-clock .cr-ctrl{margin-left:auto}
+
+/* o mostrador e a faixa são redesenhados a cada quadro: o clique tem de cair no contêiner fixo, não nos desenhos internos */
+#cronos-clock .cr-dial *,#cronos-clock .cr-bar *{pointer-events:none}
+#cronos-cal .cc-season{display:block;font-size:10px;opacity:.75;font-weight:400;letter-spacing:.02em}
+#cronos-cal .cc-dh .cc-season{display:inline;margin-left:8px}
+#cronos-cal .cc-d.cc-ss{box-shadow:inset 0 0 0 1px rgba(226,185,100,.8)}
+#cronos-cal .cc-d.cc-ss::after{content:"";position:absolute;top:3px;right:3px;width:5px;height:5px;border-radius:50%;background:#e2b964}
+#cronos-clock .cr-season[data-cr="here"]{cursor:help}
+#cronos-clock.gm .cr-season{cursor:pointer;text-decoration:underline dotted rgba(226,185,100,.6)}
+
+/* ---------- 1.4: compacto (uma faixa baixa) e sem cobrir os painéis ---------- */
+#cronos-clock{top:6px;padding:4px 8px 4px 5px;gap:8px;--dial:50px;min-height:0}
+#cronos-clock .cr-dial{width:50px;height:50px;flex:0 0 50px;box-shadow:0 0 0 1.5px #2e333d,0 0 0 2.5px rgba(226,185,100,.55),0 3px 10px rgba(0,0,0,.6),inset 0 0 8px rgba(0,0,0,.6)}
+#cronos-clock .cr-dhand{height:22px}
+#cronos-clock .cr-mid{gap:0;min-width:150px}
+#cronos-clock .cr-date,#cronos-clock.wide .cr-date{font-size:12.5px;line-height:1.2}
+#cronos-clock .cr-sub{font-size:10.5px;line-height:1.25}
+#cronos-clock .cr-timeRow .cr-clock,#cronos-clock.wide .cr-timeRow .cr-clock{font-size:17px;line-height:1.15}
+#cronos-clock .cr-bar,#cronos-clock .cr-bar .skybar{height:46px}
+#cronos-clock .cr-bar svg{height:46px}
+#cronos-clock .cr-ctrl{gap:3px;padding-left:8px}
+#cronos-clock .cr-row{gap:3px}
+#cronos-clock button,#cronos-clock select{height:22px;min-width:24px;padding:0 5px;font-size:11px;border-radius:5px}
+#cronos-clock .cr-play{min-width:30px;font-size:12px}
+#cronos-clock .cr-row select{min-width:70px}
+#cronos-clock.bottom{top:auto;bottom:6px}
+/* sem vão livre: as colunas laterais descem (ou sobem) para o relógio caber */
+body.cronos-push:not(.cronos-bottom) #ui-left,body.cronos-push:not(.cronos-bottom) #ui-right{padding-top:var(--cronos-band,70px);box-sizing:border-box}
+body.cronos-push.cronos-bottom #ui-left,body.cronos-push.cronos-bottom #ui-right{padding-bottom:var(--cronos-band,70px);box-sizing:border-box}
+.cronos-panel header [data-pop]{font-size:11px;opacity:.8}
+body.brumas-popout .cronos-panel.brumas-pop-el{display:flex;flex-direction:column}
+body.brumas-popout .cronos-panel.brumas-pop-el .cp-body{flex:1 1 auto;overflow:auto;max-height:none}
+/* imersão: parte do dia no lugar da hora */
+#cronos-clock .cr-timeRow .cr-clock.period{font:700 16px "Cinzel","Signika",serif;letter-spacing:.05em;color:var(--gold2)}
+#cronos-clock .cr-timeRow .cr-clock.revealed{color:#fff;text-shadow:0 0 8px rgba(243,208,138,.9)}
+/* ---------- calendário em disco (estilo antigo) ---------- */
+#cronos-cal .cd-wrap{display:flex;justify-content:center}
+#cronos-cal svg.cd{width:min(400px,100%);height:auto;display:block;filter:drop-shadow(0 6px 16px rgba(0,0,0,.55))}
+#cronos-cal .cd-rot{transform-origin:200px 200px;transition:transform .7s cubic-bezier(.3,.8,.3,1)}
+#cronos-cal .cd-mo{fill:#3a2f1d;stroke:#7d6338;stroke-width:.8}
+#cronos-cal .cd-mo.odd{fill:#463824}
+#cronos-cal .cd-mo.ic{fill:#24303f;stroke:#55708f}
+#cronos-cal .cd-mn{font:700 10.5px "Cinzel",serif;fill:#f0dcaa;text-anchor:middle;dominant-baseline:middle;letter-spacing:.06em;pointer-events:none}
+#cronos-cal .cd-day{fill:#e9dcc0;stroke:rgba(90,70,40,.25);stroke-width:.3;cursor:pointer}
+#cronos-cal .cd-day:hover{fill:#f7e7bf}
+#cronos-cal .cd-day.now{fill:#f3c86a}
+#cronos-cal .cd-day.sel{fill:#e2b964}
+#cronos-cal .cd-ticks line{stroke:#5b4526;stroke-width:.6;pointer-events:none}
+#cronos-cal .cd-ticks line.m{stroke:#2a1f10;stroke-width:1.4}
+#cronos-cal .cd-ev{fill:#9b2f22;pointer-events:none}
+#cronos-cal .cd-se{opacity:.85;stroke:#1b1610;stroke-width:.6}
+#cronos-cal .cd-sn{font:600 8.5px "Cinzel",serif;fill:#fff8e6;text-anchor:middle;dominant-baseline:middle;pointer-events:none;letter-spacing:.04em}
+#cronos-cal .cd-moon.full{fill:#f4f0e2;stroke:#c9c1a6;stroke-width:.8}
+#cronos-cal .cd-moon.new{fill:#1b2030;stroke:#9aa4c4;stroke-width:.8}
+#cronos-cal .cd-ring{fill:none;stroke:#7d6338;stroke-width:1.2;pointer-events:none}
+#cronos-cal .cd-ring.out{stroke:#c9a24a;stroke-width:2}
+#cronos-cal .cd-today{fill:#ff8a3a;stroke:#fff1c2;stroke-width:1.2}
+#cronos-cal .cd-hub{fill:#1e1a12;stroke:#c9a24a;stroke-width:1.5}
+#cronos-cal .cd-ray{stroke:#c9a24a;stroke-width:1;opacity:.6}
+#cronos-cal .cd-y{font:600 11px "Cinzel",serif;fill:#aaa395;text-anchor:middle}
+#cronos-cal .cd-d{font:700 28px "Cinzel",serif;fill:#f3d08a;text-anchor:middle;dominant-baseline:middle}
+#cronos-cal .cd-dm{font:700 12px "Cinzel",serif;fill:#ece6d6;text-anchor:middle}
+#cronos-cal .cd-ds{font:600 9.5px "IBM Plex Sans",sans-serif;fill:#aaa395;text-anchor:middle}
+#cronos-cal .cd-ptr{fill:#c9a24a;stroke:#1b1610;stroke-width:1;filter:drop-shadow(0 2px 3px rgba(0,0,0,.6))}
+#cronos-cal .cd-leg{display:flex;gap:12px;justify-content:center;font-size:10.5px;color:var(--mu)}
+#cronos-cal .cd-l{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:-1px}
+#cronos-cal .cd-l.ev{background:#9b2f22}#cronos-cal .cd-l.full{background:#f4f0e2}#cronos-cal .cd-l.new{background:#1b2030;border:1px solid #9aa4c4}#cronos-cal .cd-l.today{background:#ff8a3a}
+#cronos-cal .cc-nav button.on{background:var(--gold);color:var(--ink);border-color:var(--gold)}

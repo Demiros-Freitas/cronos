@@ -85,6 +85,7 @@ function register() {
   game.settings.register(ID, "sunSecs", { name: "Segundos com a hora à vista (teste do sol)", scope: "world", config: true, type: Number, range: { min: 3, max: 60, step: 1 }, default: 15 });
   game.settings.register(ID, "pauseWithGame", { name: "Pausar o tempo com o jogo", hint: "Com o jogo pausado, o relógio em andamento para.", scope: "world", config: true, type: Boolean, default: true });
   game.settings.register(ID, "pos", { scope: "client", config: false, type: Object, default: {} });
+  game.settings.register(ID, "hidden", { scope: "client", config: false, type: Boolean, default: false, onChange: () => { renderClock(); try { ui.controls?.render?.(); } catch (e) { /* */ } } });
   game.settings.register(ID, "calView", { scope: "client", config: false, type: String, default: "grade" });
   game.settings.register(ID, "dock", { name: "Posição do relógio", hint: "O relógio fica no meio da tela, em cima ou embaixo, e se ajusta à largura.", scope: "client", config: true, type: String, choices: { top: "Em cima, no centro", bottom: "Embaixo, no centro" }, default: "top", onChange: () => renderClock(true) });
 }
@@ -200,6 +201,7 @@ function renderClock(force = false) {
   if (!game.user.isGM && !game.settings.get(ID, "playersSee")) { clockEl?.remove(); clockEl = null; clockKey = ""; return; }
   const r = game.settings.get(ID, "run") ?? {}; const gm = game.user.isGM; const key = JSON.stringify([gm, !!r.on, num(r.rate, 60), game.paused]);
   if (!clockEl) { clockEl = document.createElement("div"); clockEl.id = "cronos-clock"; if (game.user.isGM) clockEl.classList.add("gm"); document.body.appendChild(clockEl); bindClock(); force = true; }
+  clockEl.classList.toggle("cr-hidden", !!game.settings.get(ID, "hidden"));
   clockEl.classList.toggle("bottom", game.settings.get(ID, "dock") === "bottom"); fitClock();
   if (force || key !== clockKey) {
     clockKey = key; const c = cal();
@@ -468,3 +470,14 @@ Hooks.on("updateWorldTime", () => onTime());
 Hooks.on("pauseGame", () => refreshAll());
 // o lugar de onde o relógio é visto, a inclinação do planeta e o clima moram nas cenas do Atlas
 Hooks.on("updateScene", (s, ch) => { if (ch?.flags?.["brumas-atlas"]) refreshAll(); });
+
+/* botão na barra da esquerda (grupo dos tokens): mostra ou esconde o relógio, só para quem clicou */
+const clockOn = () => !game.settings.get(ID, "hidden");
+Hooks.on("getSceneControlButtons", (controls) => {
+  if (!game.user.isGM && !game.settings.get(ID, "playersSee")) return;
+  const tool = { name: "cronosClock", title: "Relógio do Cronos (mostrar ou esconder)", icon: "fa-solid fa-clock", toggle: true, active: clockOn(), order: 99, button: false,
+    onChange: (event, active) => game.settings.set(ID, "hidden", !active),
+    onClick: (active) => game.settings.set(ID, "hidden", typeof active === "boolean" ? !active : clockOn()) };
+  if (Array.isArray(controls)) { const g = controls.find(c => c.name === "token"); if (g) g.tools.push(tool); return; } // Foundry 12
+  const g = controls.tokens ?? controls.token; if (g?.tools) { delete tool.onClick; g.tools.cronosClock = tool; }
+});

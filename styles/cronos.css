@@ -165,3 +165,5 @@ body.brumas-popout .cronos-panel.brumas-pop-el .cp-body{flex:1 1 auto;overflow:a
 #cronos-cal .cd-l{display:inline-block;width:8px;height:8px;border-radius:50%;margin-right:4px;vertical-align:-1px}
 #cronos-cal .cd-l.ev{background:#9b2f22}#cronos-cal .cd-l.full{background:#f4f0e2}#cronos-cal .cd-l.new{background:#1b2030;border:1px solid #9aa4c4}#cronos-cal .cd-l.today{background:#ff8a3a}
 #cronos-cal .cc-nav button.on{background:var(--gold);color:var(--ink);border-color:var(--gold)}
+
+#cronos-clock.cr-hidden{display:none!important}

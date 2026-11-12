@@ -316,3 +316,8 @@ li.cr-bound.passou:hover>*{opacity:.85;filter:grayscale(.4)}
 .cr-tempo-btn:hover:not(:disabled){filter:brightness(1.2);box-shadow:0 0 12px color-mix(in srgb,var(--cf) 60%,transparent)}
 .cr-tempo-btn:disabled{cursor:default;animation:none;opacity:.85}
 @media (prefers-reduced-motion:reduce){.cr-tempo-btn{animation:none}}
+
+.cr-auto{margin-left:4px;font-size:.62rem;color:var(--cf,#c9a24a)}
+.cr-item-mini.on{color:var(--cf,#c9a24a)}
+.cr-macro .cr-item-usar{border-style:dashed}
+.cr-tempo-btn.macro{border-style:dashed;animation:none}

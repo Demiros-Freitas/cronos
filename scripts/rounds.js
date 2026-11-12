@@ -3,6 +3,7 @@
 // - Início e Fim da Rodada são faixas fixas no rastreador; cada uma tem um espaço para itens (arraste um item: ação de covil,
 //   efeito do lugar…) que ficam guardados na cena e podem ser usados sempre que a rodada passa por ali.
 // - Quem já agiu desce para baixo do Fim da Rodada, em cinza; a ordem é numerada e as linhas deslizam ao mudar de lugar.
+// - Macros também entram nas faixas; as marcadas com ⚡ rodam sozinhas quando a rodada chega ali (recebem combat, round, fase).
 // - Grupos: vários combatentes agem juntos, na vez do de maior iniciativa (um bloco recolhível no rastreador).
 // Outros módulos podem ouvir os ganchos "cronosRoundStart" e "cronosRoundEnd" (combat, round).
 const ID = "brumas-cronos";
@@ -94,7 +95,7 @@ export function hookRoundPhases() {
   // virada de etapa: faixa na tela e ganchos para outros módulos
   Hooks.on("updateCombat", (cb, ch) => {
     const nf = ch?.flags?.[ID]?.fase; if (!nf || !cb.started) return;
-    if (nf === "inicio" || nf === "fim") { banner(nf, cb.round); Hooks.callAll(nf === "inicio" ? "cronosRoundStart" : "cronosRoundEnd", cb, cb.round); }
+    if (nf === "inicio" || nf === "fim") { banner(nf, cb.round); Hooks.callAll(nf === "inicio" ? "cronosRoundStart" : "cronosRoundEnd", cb, cb.round); autoMacros(cb, nf); }
   });
   Hooks.on("combatStart", (cb) => setTimeout(() => { if (faseOf(cb) === "inicio") banner("inicio", cb.round); }, 300));
   Hooks.on("renderCombatTracker", (app, html) => { try { decorate(app, html instanceof HTMLElement ? html : html?.[0] ?? app.element); } catch (e) { console.warn(`${ID} | rastreador`, e); } });
@@ -115,8 +116,16 @@ async function itemNoApoio(src) {
   if (it) await it.update({ name: data.name, img: data.img, system: data.system }); else [it] = await a.createEmbeddedDocuments("Item", [data]);
   return a.items.get(it.id) ?? it;
 }
+/** Macros marcadas como automáticas rodam sozinhas quando a rodada chega à faixa (uma vez por rodada; voltar etapas não repete). */
+const jaRodou = new Set();
+async function autoMacros(cb, fase) {
+  if (!isActiveGM()) return; const k = `${cb.id}|${cb.round}|${fase}`; if (jaRodou.has(k)) return; jaRodou.add(k);
+  for (const x of itensDe(cb, fase)) { if (x.kind !== "Macro" || x.auto === false) continue;
+    try { const m = await fromUuid(x.uuid); await m?.execute?.({ combat: cb, round: cb.round, fase, cronos: true }); } catch (e) { console.warn(`${ID} | macro da rodada`, e); ui.notifications.warn(`Cronos · a macro "${x.name}" deu erro (veja o console).`); } }
+}
 async function usarItem(uuid) {
   let it = await fromUuid(uuid); if (!it) return ui.notifications.warn("Cronos · o item não existe mais.");
+  if (it.documentName === "Macro") { const cb = game.combat; return it.execute({ combat: cb, round: cb?.round, fase: faseOf(cb), cronos: true }); }
   if (!it.actor && it.documentName === "Item" && game.user.isGM) { try { it = await itemNoApoio(it); } catch (e) { console.warn(`${ID} | ação da rodada`, e); } }
   if (typeof it.use === "function") return it.use();
   if (typeof it.roll === "function") return it.roll();
@@ -170,10 +179,10 @@ function decorate(app, root) {
       <button type="button" class="cr-act cr-act-principal" data-cr-act="avancar"><span>${prox}</span><i class="fas fa-step-forward"></i></button></div>`));
   }
   // na etapa de Início ou Fim da Rodada: as ações da rodada à mão, logo abaixo dos botões
-  if (f === "inicio" || f === "fim") { const its = itensDe(cb, f).filter(x => gm || x.show);
+  if (f === "inicio" || f === "fim") { const its = itensDe(cb, f).filter(x => gm || (x.show && x.kind !== "Macro"));
     if (its.length) { const ref = root.querySelector(".cr-acts") ?? box;
       ref.after(mk(`<div class="cr-tempo" style="--cf:${fi.cor}"><span class="cr-tempo-tit"><span class="cr-sig"></span>Ações ${f === "inicio" ? "do Início" : "do Fim"} da Rodada</span><div class="cr-tempo-lista">${its.map(x => { const it = fromUuidSync?.(x.uuid); const nome = it?.name ?? x.name ?? "Ação"; const img = it?.img ?? x.img ?? "icons/svg/clockwork.svg";
-        return `<button type="button" class="cr-tempo-btn" data-cr-act="usar" data-uuid="${esc(x.uuid)}" ${gm ? "" : "disabled"} title="${gm ? `Usar: ${esc(nome)}` : esc(nome)}"><img src="${esc(img)}" alt=""><span>${esc(nome)}</span></button>`; }).join("")}</div></div>`)); } }
+        return `<button type="button" class="cr-tempo-btn ${x.kind === "Macro" ? "macro" : ""}" data-cr-act="usar" data-uuid="${esc(x.uuid)}" ${gm ? "" : "disabled"} title="${x.kind === "Macro" ? `Rodar de novo: ${esc(nome)}${x.auto !== false ? " (já rodou sozinha)" : ""}` : gm ? `Usar: ${esc(nome)}` : esc(nome)}"><img src="${esc(img || "icons/svg/dice-target.svg")}" alt=""><span>${esc(nome)}</span>${x.kind === "Macro" && x.auto !== false ? `<i class="fas fa-bolt cr-auto"></i>` : ""}</button>`; }).join("")}</div></div>`)); } }
   if (!list) return;
 
   // linhas: quem vai agir, Fim da Rodada, quem já agiu (cinza). Numeração cronológica.
@@ -209,12 +218,14 @@ function decorate(app, root) {
       <span class="cr-sig"></span><span class="cr-bound-label">${FASES[tipo].nome}</span>${itens.length ? `<span class="cr-bound-n" title="Itens nesta faixa">${itens.length}</span>` : ""}<span class="cr-bound-round">R${cb.round}</span><i class="fas fa-chevron-down cr-bound-chev"></i></li>`);
     if (!aberto) return [row];
     const fx = tipo === "fim" && gm ? terminam(cb) : [];
-    const chips = itens.map(x => { const it = fromUuidSync?.(x.uuid); const nome = it?.name ?? x.name ?? "Item"; const img = it?.img ?? x.img ?? "icons/svg/item-bag.svg";
+    const chips = itens.map(x => { const it = fromUuidSync?.(x.uuid); const nome = it?.name ?? x.name ?? "Item"; const img = it?.img ?? x.img ?? (x.kind === "Macro" ? "icons/svg/dice-target.svg" : "icons/svg/item-bag.svg");
+      if (x.kind === "Macro") return `<div class="cr-item cr-macro ${ativo ? "pronto" : ""}" data-uuid="${esc(x.uuid)}"><button type="button" class="cr-item-usar" data-cr-act="usar" data-uuid="${esc(x.uuid)}" title="Rodar a macro agora" ${gm ? "" : "disabled"}><img src="${esc(img)}" alt=""><span>${esc(nome)}</span>${x.auto !== false ? `<i class="fas fa-bolt cr-auto" title="Roda sozinha"></i>` : ""}</button>
+        ${gm ? `<button type="button" class="cr-item-mini ${x.auto !== false ? "on" : ""}" data-cr-act="auto" data-tipo="${tipo}" data-uuid="${esc(x.uuid)}" title="${x.auto !== false ? "Roda sozinha quando a rodada chega aqui: clique para só rodar à mão" : "Só roda à mão: clique para rodar sozinha"}"><i class="fas fa-bolt"></i></button><button type="button" class="cr-item-mini" data-cr-act="tirar" data-tipo="${tipo}" data-uuid="${esc(x.uuid)}" title="Tirar desta faixa"><i class="fas fa-xmark"></i></button>` : ""}</div>`;
       return `<div class="cr-item ${ativo ? "pronto" : ""}" data-uuid="${esc(x.uuid)}"><button type="button" class="cr-item-usar" data-cr-act="usar" data-uuid="${esc(x.uuid)}" title="${gm || it?.isOwner ? `Usar ${esc(nome)}` : esc(nome)}" ${gm || it?.isOwner ? "" : "disabled"}><img src="${esc(img)}" alt=""><span>${esc(nome)}</span></button>
         ${gm ? `<button type="button" class="cr-item-mini" data-cr-act="ver" data-tipo="${tipo}" data-uuid="${esc(x.uuid)}" title="${x.show ? "Os jogadores veem: clique para esconder" : "Só você vê: clique para mostrar aos jogadores"}"><i class="fas ${x.show ? "fa-eye" : "fa-eye-slash"}"></i></button><button type="button" class="cr-item-mini" data-cr-act="tirar" data-tipo="${tipo}" data-uuid="${esc(x.uuid)}" title="Tirar desta faixa"><i class="fas fa-xmark"></i></button>` : ""}</div>`; }).join("");
     const panel = mk(`<li class="cr-bound-panel cr-bound-panel-${tipo}" data-cr-drop="${tipo}">
       ${chips ? `<div class="cr-itens">${chips}</div>` : gm ? "" : `<span class="cr-vazio">Nada acontece ${tipo === "inicio" ? "no início" : "no fim"} da rodada.</span>`}
-      ${gm ? `<div class="cr-drop"><i class="fas fa-hand-pointer"></i> Arraste um item para cá: vira uma ação da rodada (covil, efeito do lugar…)</div>` : ""}
+      ${gm ? `<div class="cr-drop"><i class="fas fa-hand-pointer"></i> Arraste um item ou uma macro para cá (covil, efeito do lugar…). Macros com ⚡ rodam sozinhas.</div>` : ""}
       ${fx.length ? `<div class="cr-terminam"><span class="cr-panel-title">Terminam agora</span>${fx.map(t => `<span>${esc(t)}</span>`).join("")}</div>` : ""}</li>`);
     return [row, panel];
   };
@@ -259,8 +270,8 @@ async function onClick(ev, root) {
     if (act === "voltar-rodada") return cb.previousRound();
     if (act === "grupo") return dialogoGrupo(cb, a.dataset.grupo ?? null);
     if (act === "usar") return usarItem(a.dataset.uuid);
-    if (act === "tirar" || act === "ver") { const t = a.dataset.tipo; const l = itensDe(cb, t).map(x => ({ ...x }));
-      const i = l.findIndex(x => x.uuid === a.dataset.uuid); if (i < 0) return; if (act === "tirar") l.splice(i, 1); else l[i].show = !l[i].show; return salvarItens(cb, t, l); }
+    if (act === "tirar" || act === "ver" || act === "auto") { const t = a.dataset.tipo; const l = itensDe(cb, t).map(x => ({ ...x }));
+      const i = l.findIndex(x => x.uuid === a.dataset.uuid); if (i < 0) return; if (act === "tirar") l.splice(i, 1); else if (act === "auto") l[i].auto = l[i].auto === false; else l[i].show = !l[i].show; return salvarItens(cb, t, l); }
     return; }
   const b = ev.target.closest?.("[data-cr-bound]"); if (b) { const t = b.dataset.crBound; abertos.has(t) ? abertos.delete(t) : abertos.add(t); return ui.combat?.render?.(); }
   const g = ev.target.closest?.("[data-cr-grupo]"); if (g && !ev.target.closest("li.combatant")) { const id = g.dataset.crGrupo; gruposAbertos.has(id) ? gruposAbertos.delete(id) : gruposAbertos.add(id); return ui.combat?.render?.(); }
@@ -268,9 +279,10 @@ async function onClick(ev, root) {
 async function onDrop(ev) {
   const z = ev.target.closest?.("[data-cr-drop],[data-cr-bound]"); if (!z || !game.user.isGM) return; ev.preventDefault(); ev.stopPropagation(); z.classList.remove("cr-drop-on");
   const TE = foundry.applications?.ux?.TextEditor?.implementation ?? globalThis.TextEditor; const d = TE?.getDragEventData?.(ev) ?? {};
-  if (d.type !== "Item" || !d.uuid) return ui.notifications.warn("Cronos · arraste um item (do diretório, de um compêndio ou de uma ficha).");
+  if (!["Item", "Macro"].includes(d.type) || !d.uuid) return ui.notifications.warn("Cronos · arraste um item ou uma macro (do diretório, de um compêndio, de uma ficha ou da barra de macros).");
   const it = await fromUuid(d.uuid); const cb = game.combat; const tipo = z.dataset.crDrop ?? z.dataset.crBound; const l = itensDe(cb, tipo).map(x => ({ ...x }));
-  if (l.some(x => x.uuid === d.uuid)) return; l.push({ uuid: d.uuid, name: it?.name ?? "Item", img: it?.img ?? "", show: false });
+  if (l.some(x => x.uuid === d.uuid)) return;
+  l.push(d.type === "Macro" ? { uuid: d.uuid, kind: "Macro", name: it?.name ?? "Macro", img: it?.img ?? "", show: false, auto: true } : { uuid: d.uuid, name: it?.name ?? "Item", img: it?.img ?? "", show: false });
   abertos.add(tipo); await salvarItens(cb, tipo, l);
 }
 

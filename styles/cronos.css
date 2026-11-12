@@ -321,3 +321,14 @@ li.cr-bound.passou:hover>*{opacity:.85;filter:grayscale(.4)}
 .cr-item-mini.on{color:var(--cf,#c9a24a)}
 .cr-macro .cr-item-usar{border-style:dashed}
 .cr-tempo-btn.macro{border-style:dashed;animation:none}
+/* contagem de covil: separador violeta no meio da ordem */
+li.cr-bound.cr-bound-covil{--cf:#9b7be0;color:#b9a3ea;background:linear-gradient(90deg,rgba(110,80,190,.22),rgba(0,0,0,.55) 60%);border-color:rgba(130,100,210,.45)}
+li.cr-bound.cr-bound-covil.ativo{color:#e2d6ff;border-color:#9b7be0;box-shadow:inset 3px 0 0 #9b7be0,0 0 10px rgba(155,123,224,.45)}
+li.cr-bound-panel.cr-bound-panel-covil{--cf:#9b7be0;border-bottom-color:rgba(130,100,210,.35)}
+.cr-item-usar small,.cr-tempo-btn small{font:400 .6rem "IBM Plex Sans",sans-serif;letter-spacing:0;color:#a89f8f;text-transform:none}
+.cr-item-usar.repetida,.cr-tempo-btn.repetida{opacity:.55;border-style:dashed;animation:none;filter:grayscale(.5)}
+.cr-item-usar.repetida::after,.cr-tempo-btn.repetida::after{content:"rodada passada";margin-left:6px;font:italic 400 .58rem "Crimson Text",serif;color:#c9876f}
+.cr-item-usar.usada,.cr-tempo-btn.usada{box-shadow:inset 0 0 0 1px var(--cf);animation:none}
+.cr-item-usar.usada::after,.cr-tempo-btn.usada::after{content:"✓";margin-left:6px;color:var(--cf)}
+.cr-act.cr-act-covil{display:inline-flex;align-items:center;gap:6px;color:#c9b6f2;border-color:rgba(155,123,224,.55)}
+.cr-act.cr-act-covil:hover{color:#efe6ff;border-color:#9b7be0}

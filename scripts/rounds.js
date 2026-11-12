@@ -14,6 +14,7 @@ const REDUCED = () => globalThis.matchMedia?.("(prefers-reduced-motion: reduce)"
 const FASES = {
   inicio: { nome: "Início da Rodada", cor: "#d8b45c" },
   turnos: { nome: "Turnos", cor: "#c9615a" },
+  covil: { nome: "Ação de Covil", cor: "#9b7be0" },
   fim: { nome: "Fim da Rodada", cor: "#c97a45" },
 };
 const ORDEM = ["inicio", "turnos", "fim"];
@@ -42,6 +43,24 @@ export function entidades(cb) {
 const vivo = (e) => !skipDefeated() || e.membros.some(m => !m.defeated);
 const idxDaVez = (cb, E = entidades(cb)) => { const c = cb.combatant; return c ? E.findIndex(e => e.membros.some(m => m.id === c.id)) : -1; };
 
+/* ================= ações de covil (contagem de iniciativa fixa, perdendo empates) ================= */
+const initOf = (e) => Number.isFinite(e?.rep?.initiative) ? e.rep.initiative : -Infinity;
+export const covisOf = (cb) => { const l = cb?.getFlag?.(ID, "covil"); return Array.isArray(l) ? l : []; };
+const covilInits = (cb) => [...new Set(covisOf(cb).map(x => Number(x.init) || 20))].sort((a, b) => b - a);
+const feitosDe = (cb) => { const f = cb?.getFlag?.(ID, "covilFeitos"); return f?.round === cb?.round && Array.isArray(f.inits) ? f.inits : []; };
+/** Contagem de covil ainda por acontecer entre quem acabou de agir (hi) e o próximo (lo). Em empate, o covil vem depois. */
+const covilEntre = (cb, hi, lo, feitos = feitosDe(cb)) => covilInits(cb).find(L => !feitos.includes(L) && hi >= L && L > lo);
+/** Procura nos atores do combate os itens com atividade "Ação de covil" (ou ativação de covil, nas fichas antigas). */
+export function buscarCovil(cb) {
+  const out = []; const seen = new Set();
+  for (const c of cb?.combatants ?? []) { const a = c.actor; if (!a) continue; const L = Number(a.system?.resources?.lair?.initiative) || 20;
+    for (const it of a.items ?? []) {
+      const acts = it.system?.activities; const lair = (acts?.some?.(x => x.activation?.type === "lair")) || it.system?.activation?.type === "lair"; if (!lair) continue;
+      const k = `${a.id}|${it.name}`; if (seen.has(k)) continue; seen.add(k);
+      out.push({ uuid: it.uuid, actorId: a.id, dono: c.name, name: it.name, img: it.img, init: L }); } }
+  return out;
+}
+
 /* ================= a máquina (embrulha o combate do sistema) ================= */
 export function hookRoundPhases() {
   if (!on()) return;
@@ -64,8 +83,17 @@ export function hookRoundPhases() {
     if (!game.user.isGM) return viaGM(this, "nextTurn");
     const f = faseOf(this); const E = entidades(this);
     if (f === "fim") return this.nextRound();
-    if (f === "inicio") { const e = E.find(vivo); if (!e) { await set(this, "fim"); return this; } await set(this, "turnos", repIdx(this, e)); return this; }
+    const covil = (L, turn) => this.update({ ...(turn != null ? { turn } : {}), [`flags.${ID}.fase`]: "covil", [`flags.${ID}.covilAt`]: L });
+    if (f === "inicio") { const e = E.find(vivo); const L = covilEntre(this, Infinity, initOf(e)); if (L != null) { await covil(L, repIdx(this, e)); return this; }
+      if (!e) { await set(this, "fim"); return this; } await set(this, "turnos", repIdx(this, e)); return this; }
+    if (f === "covil") { // a contagem de covil acabou: segue para quem vem depois dela
+      const L = Number(this.getFlag(ID, "covilAt")); const feitos = [...feitosDe(this), L]; const prox = E.find(e => vivo(e) && initOf(e) < L);
+      const L2 = covilEntre(this, L, initOf(prox), feitos); const base = { [`flags.${ID}.covilFeitos`]: { round: this.round, inits: feitos } };
+      if (L2 != null) { await this.update({ ...base, [`flags.${ID}.covilAt`]: L2 }); return this; }
+      if (!prox) { await this.update({ ...base, [`flags.${ID}.fase`]: "fim" }); return this; }
+      await this.update({ ...base, turn: repIdx(this, prox), [`flags.${ID}.fase`]: "turnos" }); return this; }
     const i = idxDaVez(this, E); const prox = E.slice(i + 1).find(vivo);
+    const L = covilEntre(this, initOf(E[i]), initOf(prox)); if (L != null) { await covil(L); return this; }
     if (!prox) { await set(this, "fim"); return this; }
     await this.update({ turn: repIdx(this, prox) }); return this;
   };
@@ -73,9 +101,15 @@ export function hookRoundPhases() {
     if (!this.started) return orig.previousTurn.apply(this, a);
     if (!game.user.isGM) return this;
     const f = faseOf(this); const E = entidades(this);
-    if (f === "fim") { const e = [...E].reverse().find(vivo); await set(this, "turnos", repIdx(this, e)); return this; }
+    const voltaCovil = async (L, turn) => { const fe = feitosDe(this).filter(x => x !== L); await this.update({ ...(turn != null ? { turn } : {}), [`flags.${ID}.fase`]: "covil", [`flags.${ID}.covilAt`]: L, [`flags.${ID}.covilFeitos`]: { round: this.round, inits: fe } }); return this; };
+    if (f === "covil") { const L = Number(this.getFlag(ID, "covilAt")); const ant = [...E].reverse().find(e => vivo(e) && initOf(e) >= L);
+      const Lc = feitosDe(this).filter(x => x > L && (ant ? initOf(ant) : Infinity) >= x).sort((a, b) => a - b)[0]; if (Lc != null) return voltaCovil(Lc);
+      if (!ant) { await set(this, "inicio", repIdx(this, E.find(vivo) ?? E[0])); return this; } await set(this, "turnos", repIdx(this, ant)); return this; }
+    if (f === "fim") { const e = [...E].reverse().find(vivo); const Lc = feitosDe(this).filter(x => x < initOf(e) || !e).sort((a, b) => a - b)[0];
+      if (Lc != null) return voltaCovil(Lc); await set(this, "turnos", repIdx(this, e)); return this; }
     if (f === "inicio") { if (this.round <= 1) return this; const r = await orig.previousRound.apply(this, a); await set(this, "fim"); return r; }
     const i = idxDaVez(this, E); const ant = E.slice(0, Math.max(0, i)).reverse().find(vivo);
+    { const Lc = feitosDe(this).filter(x => x > initOf(E[i]) && (ant ? initOf(ant) : Infinity) >= x).sort((a, b) => a - b)[0]; if (Lc != null) return voltaCovil(Lc, ant ? repIdx(this, ant) : null); }
     if (!ant) { await set(this, "inicio", repIdx(this, E.find(vivo) ?? E[0])); return this; }
     await this.update({ turn: repIdx(this, ant) }); return this;
   };
@@ -96,6 +130,7 @@ export function hookRoundPhases() {
   // virada de etapa: faixa na tela e ganchos para outros módulos
   Hooks.on("updateCombat", (cb, ch) => {
     const nf = ch?.flags?.[ID]?.fase; if (!nf || !cb.started) return;
+    if (nf === "covil") { banner("covil", cb.round, cb.getFlag(ID, "covilAt")); Hooks.callAll("cronosLair", cb, cb.getFlag(ID, "covilAt")); }
     if (nf === "inicio" || nf === "fim") { banner(nf, cb.round); Hooks.callAll(nf === "inicio" ? "cronosRoundStart" : "cronosRoundEnd", cb, cb.round); autoMacros(cb, nf); }
   });
   Hooks.on("combatStart", (cb) => setTimeout(() => { if (faseOf(cb) === "inicio") banner("inicio", cb.round); }, 300));
@@ -110,6 +145,13 @@ async function salvarItens(cb, tipo, lista) { const sc = sceneOf(cb); if (!sc ||
 /** Item solto (do diretório ou de um compêndio): o D&D só usa itens que estão numa ficha. Em vez de criar um ator, o Cronos
  *  monta uma cópia temporária (que não é salva) presa a um ator que já existe — de preferência um inimigo do combate — e o
  *  cartão sai no chat como "Ações da Rodada". Os botões do cartão (teste, dano) funcionam, porque os dados vão junto na mensagem. */
+/** Macros marcadas como automáticas rodam sozinhas quando a rodada chega à faixa (uma vez por rodada; voltar etapas não repete). */
+const jaRodou = new Set();
+async function autoMacros(cb, fase) {
+  if (!isActiveGM()) return; const k = `${cb.id}|${cb.round}|${fase}`; if (jaRodou.has(k)) return; jaRodou.add(k);
+  for (const x of itensDe(cb, fase)) { if (x.kind !== "Macro" || x.auto === false) continue;
+    try { const m = await fromUuid(x.uuid); await m?.execute?.({ combat: cb, round: cb.round, fase, cronos: true }); } catch (e) { console.warn(`${ID} | macro da rodada`, e); ui.notifications.warn(`Cronos · a macro "${x.name}" deu erro (veja o console).`); } }
+}
 function anfitriao(cb) {
   const npc = (a) => a && a.type !== "character" && a.type !== "group";
   return cb?.combatants?.contents?.map(c => c.actor).find(npc) ?? game.actors.find(npc) ?? cb?.combatants?.contents?.[0]?.actor ?? game.actors.contents[0] ?? null;
@@ -157,24 +199,29 @@ function decorate(app, root) {
   const mk = (html) => { const t = doc.createElement("template"); t.innerHTML = html.trim(); return t.content.firstElementChild; };
   if (!cb || !cb.started) {
     const box = mk(`<div class="cr-fase-box cr-fase-off"><span class="cr-orn l"></span><div class="cr-fase-centro"><span class="cr-kicker">Gestor de turnos</span><strong class="cr-fase-name">${cb ? "Preparação" : "Fora de combate"}</strong>${cb ? `<span class="cr-fase-sub">Role a iniciativa e comece o combate</span>` : ""}</div><span class="cr-orn r"></span></div>`);
-    header ? header.after(box) : root.prepend(box); posAnt.clear(); return;
+    header ? header.after(box) : root.prepend(box); posAnt.clear();
+    if (cb && game.user.isGM) { const n = covisOf(cb).length;
+      box.after(mk(`<div class="cr-acts"><button type="button" class="cr-act cr-act-covil" data-cr-act="covil" title="Procura nos combatentes as ações de covil e cria a contagem de covil no rastreador"><i class="fas fa-dragon"></i><span>Buscar ações de covil${n ? ` · ${n}` : ""}</span></button></div>`)); }
+    return;
   }
   const gm = game.user.isGM; const f = faseOf(cb); const fi = FASES[f]; const E = entidades(cb); const iv = idxDaVez(cb, E);
-  const agiu = (k) => f === "fim" || (f === "turnos" && k < iv);
+  const covilAt = f === "covil" ? Number(cb.getFlag(ID, "covilAt")) : null; const feitos = feitosDe(cb); const Ls = covilInits(cb);
+  const agiu = (k) => f === "fim" || (f === "turnos" && k < iv) || (f === "covil" && initOf(E[k]) >= covilAt);
   root.classList.toggle("cr-roundphase", f !== "turnos");
   const daVez = f === "turnos" ? E[iv] : null;
   const nomeVez = daVez ? (daVez.grupo ? `${daVez.grupo.nome} (grupo)` : (daVez.rep.isOwner || gm || !daVez.rep.hidden ? daVez.rep.name : "???")) : "";
 
   // caixa da etapa (no alto)
-  const passo = ORDEM.indexOf(f);
-  const trilha = ORDEM.map((e, k) => `<span class="cr-pip ${k < passo ? "feito" : ""} ${k === passo ? "atual" : ""}" style="--cp:${FASES[e].cor}" title="${FASES[e].nome}"></span>`).join(`<span class="cr-fio"></span>`);
+  const ORD = Ls.length ? ["inicio", "covil", "turnos", "fim"] : ORDEM; const passo = ORD.indexOf(f);
+  const trilha = ORD.map((e, k) => `<span class="cr-pip ${k < passo ? "feito" : ""} ${k === passo ? "atual" : ""}" style="--cp:${FASES[e].cor}" title="${FASES[e].nome}"></span>`).join(`<span class="cr-fio"></span>`);
   const box = mk(`<div class="cr-fase-box" style="--cf:${fi.cor}"><span class="cr-orn l"></span><div class="cr-fase-centro">
     <span class="cr-kicker">Rodada ${cb.round}</span><strong class="cr-fase-name"><span class="cr-sig"></span>${f === "turnos" ? "Turno" : fi.nome}<span class="cr-sig"></span></strong>
-    ${daVez ? `<span class="cr-fase-sub">${iv + 1}º a agir · ${esc(nomeVez)}</span>` : ""}<div class="cr-trilha">${trilha}</div></div><span class="cr-orn r"></span></div>`);
+    ${daVez ? `<span class="cr-fase-sub">${iv + 1}º a agir · ${esc(nomeVez)}</span>` : f === "covil" ? `<span class="cr-fase-sub">Contagem ${covilAt} · o covil age (perde empates)</span>` : ""}<div class="cr-trilha">${trilha}</div></div><span class="cr-orn r"></span></div>`);
   header ? header.after(box) : root.prepend(box);
   if (gm) {
-    const prox = { inicio: "Primeira Vez", turnos: E.slice(iv + 1).some(vivo) ? "Passar a Vez" : "Fim da Rodada", fim: "Nova Rodada" }[f];
+    const prox = { inicio: "Primeira Vez", covil: "Seguir", turnos: E.slice(iv + 1).some(vivo) ? "Passar a Vez" : "Fim da Rodada", fim: "Nova Rodada" }[f];
     box.after(mk(`<div class="cr-acts"><div class="cr-act-grupo"><button type="button" class="cr-act" data-cr-act="voltar-rodada" title="Voltar ao início da rodada (se já estiver nele, à rodada anterior)"><i class="fas fa-backward"></i></button><button type="button" class="cr-act" data-cr-act="voltar" title="Voltar uma etapa"><i class="fas fa-step-backward"></i></button></div>
+      <button type="button" class="cr-act" data-cr-act="covil" title="Buscar de novo as ações de covil dos combatentes"><i class="fas fa-dragon"></i></button>
       <button type="button" class="cr-act" data-cr-act="grupo" title="Formar um grupo (agem juntos, na vez do de maior iniciativa). Tokens selecionados já vêm marcados."><i class="fas fa-people-group"></i></button>
       <button type="button" class="cr-act cr-act-principal" data-cr-act="avancar"><span>${prox}</span><i class="fas fa-step-forward"></i></button></div>`));
   }
@@ -183,6 +230,9 @@ function decorate(app, root) {
     if (its.length) { const ref = root.querySelector(".cr-acts") ?? box;
       ref.after(mk(`<div class="cr-tempo" style="--cf:${fi.cor}"><span class="cr-tempo-tit"><span class="cr-sig"></span>Ações ${f === "inicio" ? "do Início" : "do Fim"} da Rodada</span><div class="cr-tempo-lista">${its.map(x => { const it = fromUuidSync?.(x.uuid); const nome = it?.name ?? x.name ?? "Ação"; const img = it?.img ?? x.img ?? "icons/svg/clockwork.svg";
         return `<button type="button" class="cr-tempo-btn ${x.kind === "Macro" ? "macro" : ""}" data-cr-act="usar" data-uuid="${esc(x.uuid)}" ${gm ? "" : "disabled"} title="${x.kind === "Macro" ? `Rodar de novo: ${esc(nome)}${x.auto !== false ? " (já rodou sozinha)" : ""}` : gm ? `Usar: ${esc(nome)}` : esc(nome)}"><img src="${esc(img || "icons/svg/dice-target.svg")}" alt=""><span>${esc(nome)}</span>${x.kind === "Macro" && x.auto !== false ? `<i class="fas fa-bolt cr-auto"></i>` : ""}</button>`; }).join("")}</div></div>`)); } }
+  if (f === "covil") { const its = covisOf(cb).filter(x => (Number(x.init) || 20) === covilAt); const uso = cb.getFlag(ID, "covilUso") ?? {};
+    if (its.length && gm) { const ref = root.querySelector(".cr-acts") ?? box;
+      ref.after(mk(`<div class="cr-tempo" style="--cf:${fi.cor}"><span class="cr-tempo-tit"><span class="cr-sig"></span>Ações de Covil · contagem ${covilAt}</span><div class="cr-tempo-lista">${its.map(x => covilBtn(x, uso, cb.round, "cr-tempo-btn")).join("")}</div></div>`)); } }
   if (!list) return;
 
   // linhas: quem vai agir, Fim da Rodada, quem já agiu (cinza). Numeração cronológica.
@@ -231,6 +281,19 @@ function decorate(app, root) {
   };
   const ini = faixa("inicio"); list.prepend(...ini);
   const fim = faixa("fim"); const primPassado = foram[0]?.el; if (primPassado) primPassado.before(...fim); else list.append(...fim);
+  // contagens de covil: separadores no meio da ordem, na posição da iniciativa (depois de quem empatou)
+  const uso = cb.getFlag(ID, "covilUso") ?? {};
+  for (const L of Ls) {
+    const ativo = f === "covil" && covilAt === L; const passou = !ativo && (f === "fim" || feitos.includes(L) || (f === "covil" && L > covilAt) || (f === "turnos" && L > initOf(E[iv])));
+    const its = covisOf(cb).filter(x => (Number(x.init) || 20) === L); const key = `covil${L}`; const aberto = abertaFaixa(key, ativo);
+    const row = mk(`<li class="cr-bound cr-bound-covil ${ativo ? "ativo" : ""} ${passou ? "passou" : ""} ${aberto ? "aberto" : ""}" data-cr-bound="${key}" data-cr-key="b:${key}" title="${aberto ? "Recolher" : "Expandir"}">
+      <span class="cr-sig"></span><span class="cr-bound-label">Ação de Covil · ${L}</span><span class="cr-bound-n">${its.length}</span><span class="cr-bound-round">R${cb.round}</span><i class="fas fa-chevron-down cr-bound-chev"></i></li>`);
+    const rows = [row];
+    if (aberto) rows.push(mk(`<li class="cr-bound-panel cr-bound-panel-covil"><div class="cr-itens">${its.map(x => `<div class="cr-item ${ativo ? "pronto" : ""}">${covilBtn(x, uso, cb.round, "cr-item-usar")}${gm ? `<button type="button" class="cr-item-mini" data-cr-act="covil-tirar" data-uuid="${esc(x.uuid)}" title="Tirar esta ação"><i class="fas fa-xmark"></i></button>` : ""}</div>`).join("")}</div>
+      <span class="cr-vazio">Uma ação por rodada; a regra pede não repetir a da rodada anterior.</span></li>`));
+    const sec = passou ? foram : vao; const alvo = sec.find(b => initOf(b.e) < L)?.el;
+    if (alvo) alvo.before(...rows); else if (sec === vao) fim[0].before(...rows); else list.append(...rows);
+  }
 
   // animações: virada de rodada e linhas deslizando para o novo lugar
   const antes = rodadaVista.get(cb.id); rodadaVista.set(cb.id, cb.round);
@@ -249,6 +312,10 @@ function decorate(app, root) {
     root.addEventListener("dragleave", (ev) => ev.target.closest?.("[data-cr-drop],[data-cr-bound]")?.classList.remove("cr-drop-on"));
     root.addEventListener("drop", (ev) => onDrop(ev));
   }
+}
+function covilBtn(x, uso, round, cls) {
+  const u = uso?.[x.actorId]; const repetida = u && u.uuid === x.uuid && u.round === round - 1; const usada = u && u.uuid === x.uuid && u.round === round;
+  return `<button type="button" class="${cls} ${repetida ? "repetida" : ""} ${usada ? "usada" : ""}" data-cr-act="usar-covil" data-uuid="${esc(x.uuid)}" data-actor="${esc(x.actorId)}" ${game.user.isGM ? "" : "disabled"} title="${esc(x.name)} · ${esc(x.dono)}${repetida ? " — usada na rodada passada: a regra pede outra" : usada ? " — já usada nesta rodada" : ""}"><img src="${esc(x.img || "icons/svg/castle.svg")}" alt=""><span>${esc(x.name)}<small> · ${esc(x.dono)}</small></span></button>`;
 }
 function badge(el, n, feito) {
   el.querySelector(".cr-badge")?.remove(); const b = (el.ownerDocument ?? document).createElement("span"); b.className = `cr-badge ${feito ? "feito" : ""}`; b.textContent = n;
@@ -270,6 +337,10 @@ async function onClick(ev, root) {
     if (act === "voltar-rodada") return cb.previousRound();
     if (act === "grupo") return dialogoGrupo(cb, a.dataset.grupo ?? null);
     if (act === "usar") return usarItem(a.dataset.uuid);
+    if (act === "covil") { const l = buscarCovil(cb); await cb.update({ [`flags.${ID}.covil`]: l });
+      return ui.notifications.info(l.length ? `Cronos · ${l.length} ação(ões) de covil encontrada(s): ${[...new Set(l.map(x => x.dono))].join(", ")}.` : "Cronos · nenhum combatente tem ações de covil."); }
+    if (act === "covil-tirar") return cb.update({ [`flags.${ID}.covil`]: covisOf(cb).filter(x => x.uuid !== a.dataset.uuid) });
+    if (act === "usar-covil") { const r = await usarItem(a.dataset.uuid); const uso = { ...(cb.getFlag(ID, "covilUso") ?? {}) }; uso[a.dataset.actor] = { uuid: a.dataset.uuid, round: cb.round }; await cb.update({ [`flags.${ID}.covilUso`]: uso }); return r; }
     if (act === "tirar" || act === "ver" || act === "auto") { const t = a.dataset.tipo; const l = itensDe(cb, t).map(x => ({ ...x }));
       const i = l.findIndex(x => x.uuid === a.dataset.uuid); if (i < 0) return; if (act === "tirar") l.splice(i, 1); else if (act === "auto") l[i].auto = l[i].auto === false; else l[i].show = !l[i].show; return salvarItens(cb, t, l); }
     return; }
@@ -280,7 +351,7 @@ async function onDrop(ev) {
   const z = ev.target.closest?.("[data-cr-drop],[data-cr-bound]"); if (!z || !game.user.isGM) return; ev.preventDefault(); ev.stopPropagation(); z.classList.remove("cr-drop-on");
   const TE = foundry.applications?.ux?.TextEditor?.implementation ?? globalThis.TextEditor; const d = TE?.getDragEventData?.(ev) ?? {};
   if (!["Item", "Macro"].includes(d.type) || !d.uuid) return ui.notifications.warn("Cronos · arraste um item ou uma macro (do diretório, de um compêndio, de uma ficha ou da barra de macros).");
-  const it = await fromUuid(d.uuid); const cb = game.combat; const tipo = z.dataset.crDrop ?? z.dataset.crBound; const l = itensDe(cb, tipo).map(x => ({ ...x }));
+  const it = await fromUuid(d.uuid); const cb = game.combat; const tipo = z.dataset.crDrop ?? z.dataset.crBound; if (!["inicio", "fim"].includes(tipo)) return; const l = itensDe(cb, tipo).map(x => ({ ...x }));
   if (l.some(x => x.uuid === d.uuid)) return;
   l.push(d.type === "Macro" ? { uuid: d.uuid, kind: "Macro", name: it?.name ?? "Macro", img: it?.img ?? "", show: false, auto: true } : { uuid: d.uuid, name: it?.name ?? "Item", img: it?.img ?? "", show: false });
   await salvarItens(cb, tipo, l); if (!abertaFaixa(tipo, faseOf(cb) === tipo)) await escolher(tipo, true);
@@ -313,12 +384,12 @@ async function dialogoGrupo(cb, gid) {
 
 /* ================= faixa na tela ================= */
 let bannerT = null;
-function banner(f, round) {
+function banner(f, round, L) {
   try { if (!game.settings.get(ID, "phaseBanner")) return; } catch (e) { /* */ }
   const fi = FASES[f]; if (!fi) return;
   document.getElementById("cronos-fase-banner")?.remove(); clearTimeout(bannerT);
   const el = document.createElement("div"); el.id = "cronos-fase-banner"; el.className = `f-${f}`; el.style.setProperty("--cf", fi.cor);
-  el.innerHTML = `<span class="cfb-kicker">Rodada ${round}</span><strong><span class="cr-sig"></span>${fi.nome}<span class="cr-sig"></span></strong>`;
+  el.innerHTML = `<span class="cfb-kicker">Rodada ${round}${L != null ? ` · contagem ${L}` : ""}</span><strong><span class="cr-sig"></span>${fi.nome}<span class="cr-sig"></span></strong>`;
   document.body.appendChild(el); requestAnimationFrame(() => el.classList.add("show"));
   bannerT = setTimeout(() => { el.classList.remove("show"); setTimeout(() => el.remove(), 600); }, 2000);
 }

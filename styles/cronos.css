@@ -168,27 +168,136 @@ body.brumas-popout .cronos-panel.brumas-pop-el .cp-body{flex:1 1 auto;overflow:a
 
 #cronos-clock.cr-hidden{display:none!important}
 
-/* ---------- etapas da rodada (rastreador de combate, faixa e chat) ---------- */
-.cronos-fase{--cf:#d8b45c;display:flex;flex-direction:column;align-items:center;gap:2px;margin:6px 8px;padding:8px 10px 9px;border-radius:10px;border:1px solid color-mix(in srgb,var(--cf) 60%,transparent);background:linear-gradient(180deg,color-mix(in srgb,var(--cf) 18%,#14171c),#14171c);text-align:center}
-.cronos-fase .cf-kicker{font:600 10px "IBM Plex Sans",sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#aaa395}
-.cronos-fase .cf-name{font:700 17px "Cinzel",serif;color:var(--cf);text-shadow:0 0 12px color-mix(in srgb,var(--cf) 45%,transparent)}
-.cronos-fase .cf-sub{font-size:12px;color:#ece6d6}
-.cronos-fase .cf-hint{font-size:11px;color:#aaa395;font-style:italic}
-.cronos-fase .cf-trilha{display:flex;align-items:center;gap:0;margin-top:4px}
-.cronos-fase .cf-pip{width:10px;height:10px;border-radius:50%;border:2px solid var(--cp);background:transparent;opacity:.5}
-.cronos-fase .cf-pip.feito{background:var(--cp);opacity:.6}
-.cronos-fase .cf-pip.atual{background:var(--cp);opacity:1;box-shadow:0 0 8px var(--cp)}
-.cronos-fase .cf-fio{width:26px;height:2px;background:#4a4f5a}
-.cronos-roundphase .combatant.active{background:transparent!important;box-shadow:none!important;outline:none!important;opacity:.85}
-#cronos-fase-banner{--cf:#d8b45c;position:fixed;left:50%;top:32%;transform:translate(-50%,-50%) scale(.92);z-index:200;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px 46px 16px;background:linear-gradient(90deg,transparent,rgba(14,16,22,.92) 18%,rgba(14,16,22,.92) 82%,transparent);border-top:1px solid color-mix(in srgb,var(--cf) 70%,transparent);border-bottom:1px solid color-mix(in srgb,var(--cf) 70%,transparent);opacity:0;transition:opacity .45s ease,transform .45s ease}
+/* ==========================================================================
+   GESTOR DE TURNOS · Início e Fim da Rodada (no espírito do Triaxis)
+   ========================================================================== */
+.cr-sig{display:inline-block;flex:0 0 auto;width:8px;height:8px;transform:rotate(45deg);background:var(--cf,#c9a24a);box-shadow:0 0 6px color-mix(in srgb,var(--cf,#c9a24a) 60%,transparent)}
+/* caixa da etapa */
+.cr-fase-box{--cf:#c9a24a;position:relative;display:flex;align-items:center;gap:6px;margin:6px 4px;padding:8px 8px 9px;text-align:center;
+  background:radial-gradient(ellipse 70% 120% at 50% 0%,color-mix(in srgb,var(--cf) 16%,transparent),transparent 70%),linear-gradient(180deg,#1c1813,#0c0a08);
+  border:1px solid rgba(157,126,56,.5);border-radius:3px;box-shadow:inset 0 0 0 1px rgba(0,0,0,.6),inset 0 1px 0 rgba(201,162,74,.12),0 2px 8px rgba(0,0,0,.6)}
+.cr-fase-box::before{content:"";position:absolute;left:12%;right:12%;top:-1px;height:2px;background:linear-gradient(90deg,transparent,var(--cf),transparent);box-shadow:0 0 8px color-mix(in srgb,var(--cf) 60%,transparent)}
+.cr-fase-box::after{content:"";position:absolute;left:25%;right:25%;bottom:-1px;height:1px;background:linear-gradient(90deg,transparent,rgba(201,162,74,.55),transparent)}
+.cr-fase-box.cr-fase-off{--cf:#6b6458}
+.cr-fase-centro{flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:2px}
+.cr-kicker{font:600 .55rem "Cinzel",serif;letter-spacing:3px;text-transform:uppercase;color:#8a8276}
+.cr-fase-name{display:inline-flex;align-items:center;gap:8px;font:700 .95rem "Cinzel",serif;letter-spacing:2px;text-transform:uppercase;color:var(--cf);text-shadow:0 0 10px color-mix(in srgb,var(--cf) 35%,transparent);white-space:nowrap}
+.cr-fase-name .cr-sig{width:6px;height:6px;opacity:.85}
+.cr-fase-sub{font:italic .82rem "Crimson Text",serif;color:#a89f8f;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cr-orn{flex:0 0 12px;height:1px;position:relative;background:linear-gradient(90deg,transparent,rgba(201,162,74,.6))}
+.cr-orn.r{background:linear-gradient(90deg,rgba(201,162,74,.6),transparent)}
+.cr-orn::after{content:"";position:absolute;top:-3px;width:6px;height:6px;transform:rotate(45deg);border:1px solid rgba(201,162,74,.7);background:#0c0a08}
+.cr-orn.l::after{right:-3px}.cr-orn.r::after{left:-3px}
+.cr-trilha{display:flex;align-items:center;justify-content:center;margin-top:5px}
+.cr-pip{width:8px;height:8px;transform:rotate(45deg);background:#3a352d;transition:background .2s}
+.cr-pip.feito{background:color-mix(in srgb,var(--cp) 55%,#2a2620)}
+.cr-pip.atual{width:10px;height:10px;background:var(--cp);box-shadow:0 0 6px var(--cp);animation:cr-pulso 2.4s ease-in-out infinite}
+.cr-fio{width:16px;height:1px;background:#3a352d;margin:0 4px}
+@keyframes cr-pulso{50%{filter:brightness(1.35)}}
+/* ações */
+.cr-acts{display:flex;align-items:stretch;gap:6px;margin:0 4px 8px;flex-wrap:wrap;row-gap:6px}
+.cr-act-grupo{display:inline-flex;flex:0 0 auto}
+.cr-act{flex:0 0 auto;width:auto;min-width:32px;height:30px;line-height:28px;margin:0;padding:0 8px;font:700 .68rem "Cinzel",serif;letter-spacing:.5px;color:#b8ab8e;background:linear-gradient(180deg,#1e1a14,#0e0c09);border:1px solid rgba(157,126,56,.45);border-radius:3px;cursor:pointer}
+.cr-act:hover{color:#f0e7d3;border-color:#c9a24a;background:linear-gradient(180deg,#2a2419,#13100c)}
+.cr-act-grupo .cr-act{border-radius:0}.cr-act-grupo .cr-act:first-child{border-radius:3px 0 0 3px}.cr-act-grupo .cr-act:last-child{border-radius:0 3px 3px 0;border-left-width:0}
+.cr-act.cr-act-principal{flex:1 1 auto;min-width:max-content;display:inline-flex;align-items:center;justify-content:center;gap:8px;font-size:.72rem;letter-spacing:1.5px;text-transform:uppercase;color:#1a1208;background:linear-gradient(180deg,#e3c578,#b8913c);border:1px solid #e3c578;box-shadow:0 0 10px rgba(201,162,74,.3),inset 0 1px 0 rgba(255,255,255,.35)}
+.cr-act.cr-act-principal:hover{filter:brightness(1.1);color:#000}
+/* faixas do Início e do Fim da Rodada */
+li.cr-bound{--cf:#d8b45c;display:flex;align-items:center;gap:8px;list-style:none;margin:2px 0;padding:4px 10px;min-height:28px;font-family:"Cinzel",serif;color:#b89b5e;cursor:pointer;user-select:none;
+  background:linear-gradient(90deg,rgba(157,126,56,.16),rgba(0,0,0,.55) 60%);border-top:1px solid rgba(157,126,56,.35);border-bottom:1px solid rgba(157,126,56,.35)}
+li.cr-bound:hover{filter:brightness(1.2)}
+li.cr-bound.cr-bound-fim{--cf:#b8442c;color:#c9876f;background:linear-gradient(90deg,rgba(122,27,27,.22),rgba(0,0,0,.55) 60%);border-color:rgba(122,27,27,.45)}
+li.cr-bound .cr-bound-label{flex:1;font-size:.72rem;font-weight:700;letter-spacing:1.5px;text-transform:uppercase}
+li.cr-bound .cr-bound-round{font-size:.62rem;color:#8a8276;letter-spacing:1px}
+li.cr-bound .cr-bound-n{min-width:16px;height:16px;padding:0 4px;border-radius:8px;font:700 .6rem "IBM Plex Sans",sans-serif;line-height:16px;text-align:center;color:#1a1208;background:var(--cf)}
+li.cr-bound .cr-bound-chev{font-size:.6rem;color:#8a8276;transition:transform .2s}
+li.cr-bound.aberto .cr-bound-chev{transform:rotate(180deg);color:var(--cf)}
+li.cr-bound.ativo{color:#f3d27a;border-color:#c9a24a;box-shadow:inset 3px 0 0 #c9a24a,0 0 10px rgba(201,162,74,.35);animation:cr-pulso 2.2s ease-in-out infinite}
+li.cr-bound.cr-bound-fim.ativo{color:#ff9b7a;border-color:#b8442c;box-shadow:inset 3px 0 0 #b8442c,0 0 10px rgba(184,68,44,.4)}
+li.cr-bound.cr-drop-on,li.cr-bound-panel.cr-drop-on{outline:1px dashed var(--cf,#c9a24a);outline-offset:-3px}
+li.cr-bound-panel{list-style:none;margin:-2px 0 4px;padding:6px 10px 8px 26px;background:rgba(0,0,0,.5);border-bottom:1px solid rgba(157,126,56,.25);box-shadow:inset 0 6px 8px -6px rgba(0,0,0,.8);animation:cr-abre .18s ease-out}
+li.cr-bound-panel.cr-bound-panel-fim{--cf:#b8442c;border-bottom-color:rgba(122,27,27,.4)}
+@keyframes cr-abre{from{opacity:0;transform:translateY(-4px)}}
+.cr-panel-title{display:block;margin:4px 0 3px;font:600 .55rem "Cinzel",serif;letter-spacing:2px;text-transform:uppercase;color:#8a8276}
+.cr-itens{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:5px}
+.cr-item{display:inline-flex;align-items:stretch}
+.cr-item-usar{display:inline-flex;align-items:center;gap:6px;width:auto;height:28px;margin:0;padding:0 8px 0 3px;font:600 .66rem "Cinzel",serif;letter-spacing:.4px;color:#e8dcc0;background:linear-gradient(180deg,#1e1a14,#0e0c09);border:1px solid rgba(157,126,56,.5);border-radius:3px;cursor:pointer}
+.cr-item-usar img{width:22px;height:22px;border:0;border-radius:2px;object-fit:cover}
+.cr-item-usar:hover:not(:disabled){border-color:var(--cf,#c9a24a);color:#fff;box-shadow:0 0 8px color-mix(in srgb,var(--cf,#c9a24a) 40%,transparent)}
+.cr-item-usar:disabled{cursor:default;opacity:.85}
+.cr-item.pronto .cr-item-usar{border-color:var(--cf,#c9a24a);animation:cr-pronto 1.8s ease-in-out infinite}
+@keyframes cr-pronto{50%{box-shadow:0 0 10px color-mix(in srgb,var(--cf,#c9a24a) 55%,transparent)}}
+.cr-item-mini{width:22px;height:28px;margin:0 0 0 -1px;padding:0;font-size:.62rem;line-height:26px;color:#8a8276;background:#0e0c09;border:1px solid rgba(157,126,56,.35);border-radius:0 3px 3px 0;cursor:pointer}
+.cr-item-mini+.cr-item-mini{border-radius:0 3px 3px 0}.cr-item-mini:first-of-type{border-radius:0}
+.cr-item-mini:hover{color:#f0e7d3}
+.cr-drop{padding:5px 8px;font:italic .78rem "Crimson Text",serif;color:#6b6458;border:1px dashed #3a352d;border-radius:3px;text-align:center}
+.cr-vazio{font:italic .8rem "Crimson Text",serif;color:#6b6458}
+.cr-terminam{display:flex;flex-direction:column;gap:1px;margin-top:6px;font-size:.78rem;color:#c9b9a0}
+/* ordem numerada, vez, passado */
+.cr-badge{display:flex;align-items:center;justify-content:center;flex:0 0 18px;width:18px;height:18px;margin-right:4px;font:700 .65rem "Cinzel",serif;color:#d4cbb8;background:rgba(10,9,8,.92);border:1px solid #6b7280;border-radius:999px}
+.cr-badge.feito{color:#6b6458;border-color:#3a352d}
+li.combatant.cr-vez .cr-badge,li.cr-grupo-head.cr-grupo-vez .cr-badge{color:#1a1208;background:#e3c578;border-color:#e3c578;box-shadow:0 0 8px rgba(227,197,120,.6)}
+li.combatant.cr-vez{box-shadow:inset 3px 0 0 #e3c578,inset 0 0 12px rgba(227,197,120,.12)}
+li.combatant.cr-past{background:rgba(255,255,255,.015)!important;box-shadow:none!important}
+li.combatant.cr-past>*{opacity:.5;filter:grayscale(.85) brightness(.85);transition:opacity .15s,filter .15s}
+li.combatant.cr-past:hover>*{opacity:.85;filter:grayscale(.4)}
+.cr-tracker.cr-roundphase li.combatant.active{background:transparent!important}
+/* grupos */
+li.cr-grupo-head{--cg:#c9a24a;position:relative;display:flex;align-items:center;gap:8px;min-height:46px;padding:6px 8px;margin:2px 0 0;list-style:none;cursor:pointer;user-select:none;
+  background:linear-gradient(90deg,color-mix(in srgb,var(--cg) 16%,transparent),rgba(10,9,8,.55) 70%);border:1px solid color-mix(in srgb,var(--cg) 35%,transparent);border-left:3px solid var(--cg);border-radius:3px}
+li.cr-grupo-head.aberto{border-radius:3px 3px 0 0}
+.cr-retratos{display:inline-flex;flex:0 0 auto;padding-left:8px}
+.cr-retratos img{width:30px;height:30px;margin-left:-10px;object-fit:cover;border:0;border-radius:50%;background:#0d0c0a;box-shadow:0 0 0 1px var(--cg),0 1px 3px rgba(0,0,0,.8)}
+.cr-retratos img.caido{filter:grayscale(1) brightness(.5)}
+.cr-grupo-info{display:flex;flex-direction:column;min-width:0;flex:1 1 auto;gap:1px}
+.cr-grupo-nome{display:flex;align-items:center;gap:5px;font:600 .82rem "Cinzel",serif;letter-spacing:.5px;color:#e8dcc0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cr-grupo-nome i{color:var(--cg);font-size:.75rem}
+.cr-grupo-sub{font-size:.62rem;color:#8a8276;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cr-grupo-editar{flex:0 0 24px;width:24px;height:24px;padding:0;margin:0;font-size:.72rem;line-height:22px;color:#8a8276;background:rgba(10,9,8,.7);border:1px solid #3a352d;border-radius:3px;cursor:pointer}
+.cr-grupo-editar:hover{color:#f0e7d3;border-color:var(--cg)}
+.cr-grupo-chev{flex:0 0 14px;font-size:.7rem;color:#8a8276;transition:transform .2s}
+li.cr-grupo-head.aberto .cr-grupo-chev{transform:rotate(180deg);color:var(--cg)}
+li.cr-grupo-head.cr-grupo-vez{border-color:var(--cg);background:linear-gradient(90deg,color-mix(in srgb,var(--cg) 30%,transparent),rgba(20,16,10,.7) 75%);box-shadow:0 0 10px color-mix(in srgb,var(--cg) 40%,transparent)}
+li.cr-grupo-head.cr-grupo-vez .cr-retratos img{animation:cr-gpulso 2.4s ease-in-out infinite}
+@keyframes cr-gpulso{50%{box-shadow:0 0 0 1px var(--cg),0 0 8px var(--cg)}}
+li.cr-grupo-head.cr-past{background:rgba(255,255,255,.015);border-color:#2c2823;border-left-color:color-mix(in srgb,var(--cg) 40%,#2c2823)}
+li.cr-grupo-head.cr-past>*:not(.cr-grupo-editar){opacity:.5;filter:grayscale(.85) brightness(.85)}
+li.combatant.cr-membro{margin-left:10px!important;border-left:2px solid color-mix(in srgb,var(--cg) 60%,transparent)!important;background:linear-gradient(90deg,color-mix(in srgb,var(--cg) 7%,transparent),transparent 60%)}
+li.combatant.cr-membro.cr-oculto{display:none!important}
+/* virada de rodada: o Fim gira e vira Início, as linhas sobem e um novo Fim surge */
+li.cr-bound.cr-virada{transform-origin:50% 50%;animation:cr-giro .9s cubic-bezier(.3,.7,.3,1) var(--cr-off,0ms) both}
+li.cr-bound.como-fim{--cf:#b8442c;color:#ff9b7a!important;border-color:#b8442c!important;background:linear-gradient(90deg,rgba(122,27,27,.35),rgba(0,0,0,.55) 60%)!important}
+@keyframes cr-giro{0%{transform:perspective(400px) rotateX(0);filter:brightness(1)}33%{transform:perspective(400px) rotateX(90deg);filter:brightness(1.6)}34%{transform:perspective(400px) rotateX(-90deg);filter:brightness(2)}70%{transform:perspective(400px) rotateX(8deg);filter:brightness(1.5);box-shadow:inset 3px 0 0 #c9a24a,0 0 22px rgba(243,210,122,.8)}100%{transform:none;filter:none}}
+li.cr-bound.cr-virada .cr-sig{animation:cr-sig-gira .9s ease-out var(--cr-off,0ms) both}
+@keyframes cr-sig-gira{0%{transform:rotate(45deg) scale(1)}40%{transform:rotate(225deg) scale(1.5)}100%{transform:rotate(405deg) scale(1)}}
+.cr-sobe{animation:cr-sobe .45s ease-out calc(var(--cr-off,0ms) + .32s + var(--cr-i,0) * 70ms) both}
+@keyframes cr-sobe{from{opacity:0;transform:translateY(14px);filter:grayscale(.9)}to{opacity:1;transform:none;filter:none}}
+li.cr-bound.cr-surge{transform-origin:0 50%;animation:cr-surge .6s cubic-bezier(.2,.8,.2,1) calc(var(--cr-off,0ms) + .85s) both}
+@keyframes cr-surge{from{opacity:0;transform:scaleX(.2)}60%{opacity:1;box-shadow:inset 3px 0 0 #b8442c,0 0 16px rgba(184,68,44,.6)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){li.cr-bound.cr-virada,li.cr-bound.cr-virada .cr-sig,.cr-sobe,li.cr-bound.cr-surge,.cr-pip.atual,li.cr-bound.ativo,.cr-item.pronto .cr-item-usar{animation:none}}
+/* layout amplo (rastreador destacado) */
+.cr-tracker.cr-wide .cr-fase-box{padding:12px 14px}
+.cr-tracker.cr-wide .cr-fase-name{font-size:1.3rem;letter-spacing:4px}
+.cr-tracker.cr-wide .cr-orn{flex-basis:48px}
+.cr-tracker.cr-wide li.cr-bound{min-height:36px;padding:6px 16px}
+.cr-tracker.cr-wide li.cr-bound .cr-bound-label{font-size:.85rem;letter-spacing:3px}
+.cr-tracker.cr-wide .cr-badge{flex-basis:24px;width:24px;height:24px;font-size:.8rem}
+/* diálogo de grupo */
+.cr-un-form{display:flex;flex-direction:column;gap:10px}
+.cr-un-nome{display:flex;align-items:center;gap:8px}.cr-un-nome input{flex:1}
+.cr-un-cores{display:flex;gap:6px}.cr-un-cores label{cursor:pointer}.cr-un-cores input{display:none}
+.cr-un-cores span{display:block;width:20px;height:20px;border-radius:50%;background:var(--cg);border:2px solid transparent}
+.cr-un-cores input:checked+span{border-color:#fff;box-shadow:0 0 6px var(--cg)}
+.cr-un-dica{margin:0;font-style:italic;opacity:.8}
+.cr-un-lista{display:grid;grid-template-columns:1fr 1fr;gap:4px;max-height:320px;overflow:auto}
+.cr-un-membro{display:flex;align-items:center;gap:6px;padding:3px 6px;border:1px solid #3a352d;border-radius:3px;cursor:pointer}
+.cr-un-membro img{width:26px;height:26px;border:0;border-radius:50%;object-fit:cover}
+.cr-un-membro small{margin-left:auto;font-size:.65rem;opacity:.7}
+/* faixa na tela ao virar a rodada */
+#cronos-fase-banner{--cf:#d8b45c;position:fixed;left:50%;top:30%;transform:translate(-50%,-50%) scale(.92);z-index:200;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px 56px 16px;
+  background:linear-gradient(90deg,transparent,rgba(12,10,8,.94) 18%,rgba(12,10,8,.94) 82%,transparent);border-top:1px solid color-mix(in srgb,var(--cf) 70%,transparent);border-bottom:1px solid color-mix(in srgb,var(--cf) 70%,transparent);opacity:0;transition:opacity .45s ease,transform .45s ease}
 #cronos-fase-banner.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
-#cronos-fase-banner .cfb-kicker{font:600 12px "IBM Plex Sans",sans-serif;letter-spacing:.2em;text-transform:uppercase;color:#cfc6b2}
-#cronos-fase-banner strong{font:700 34px "Cinzel",serif;color:var(--cf);text-shadow:0 0 18px color-mix(in srgb,var(--cf) 50%,transparent)}
+#cronos-fase-banner .cfb-kicker{font:600 12px "Cinzel",serif;letter-spacing:.3em;text-transform:uppercase;color:#a89f8f}
+#cronos-fase-banner strong{display:inline-flex;align-items:center;gap:14px;font:700 32px "Cinzel",serif;letter-spacing:.12em;text-transform:uppercase;color:var(--cf);text-shadow:0 0 18px color-mix(in srgb,var(--cf) 50%,transparent)}
+#cronos-fase-banner .cr-sig{width:10px;height:10px}
 @media (prefers-reduced-motion:reduce){#cronos-fase-banner{transition:none}}
-.cronos-fase-chat{--cf:#d8b45c;border-left:3px solid var(--cf);padding:2px 0 2px 8px}
-.cronos-fase-chat .cfc-head{display:flex;flex-direction:column}
-.cronos-fase-chat .cfc-head span{font-size:10px;letter-spacing:.12em;text-transform:uppercase;opacity:.75}
-.cronos-fase-chat .cfc-head strong{font:700 15px "Cinzel",serif;color:var(--cf)}
-.cronos-fase-chat .cfc-time{margin:4px 0;font-size:12px;opacity:.85}
-.cronos-fase-chat .cfc-lab{margin:6px 0 2px;font-weight:700;font-size:12px}
-.cronos-fase-chat ul{margin:0;padding-left:16px}

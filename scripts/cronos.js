@@ -85,7 +85,8 @@ function register() {
   game.settings.register(ID, "sunSecs", { name: "Segundos com a hora à vista (teste do sol)", scope: "world", config: true, type: Number, range: { min: 3, max: 60, step: 1 }, default: 15 });
   game.settings.register(ID, "pauseWithGame", { name: "Pausar o tempo com o jogo", hint: "Com o jogo pausado, o relógio em andamento para.", scope: "world", config: true, type: Boolean, default: true });
   game.settings.register(ID, "pos", { scope: "client", config: false, type: Object, default: {} });
-  game.settings.register(ID, "hidden", { scope: "client", config: false, type: Boolean, default: false, onChange: () => { renderClock(); try { ui.controls?.render?.(); } catch (e) { /* */ } } });
+  game.settings.register(ID, "hidden", { scope: "client", config: false, type: Boolean, default: false, onChange: () => { showClockAgain(); try { ui.controls?.render?.(); } catch (e) { /* */ } } });
+  game.settings.register(ID, "hideInCombat", { name: "Esconder o relógio em combate", hint: "Durante um combate em andamento na cena, o relógio some e volta sozinho quando o combate acaba.", scope: "client", config: true, type: Boolean, default: true, onChange: () => showClockAgain() });
   game.settings.register(ID, "calView", { scope: "client", config: false, type: String, default: "grade" });
   game.settings.register(ID, "dock", { name: "Posição do relógio", hint: "O relógio fica no meio da tela, em cima ou embaixo, e se ajusta à largura.", scope: "client", config: true, type: String, choices: { top: "Em cima, no centro", bottom: "Embaixo, no centro" }, default: "top", onChange: () => renderClock(true) });
 }
@@ -197,11 +198,23 @@ function markTime() { lastWT = Number(game.time?.worldTime) || 0; lastAt = perfo
 
 /* ---------- o relógio: montado uma vez, depois só os textos e o céu mudam (menus abertos não fecham) ---------- */
 let clockKey = "";
+/** O relógio está escondido? (pelo botão, ou por estar em combate) */
+function clockHidden() {
+  if (game.settings.get(ID, "hidden")) return true;
+  try { if (game.settings.get(ID, "hideInCombat")) { const cb = game.combats?.active ?? game.combat; if (cb?.started && (!cb.scene || cb.scene.id === canvas?.scene?.id)) return true; } } catch (e) { /* */ }
+  return false;
+}
+/** Ao reaparecer, o relógio é medido e redesenhado (escondido, a faixa do céu tem largura zero e fica vazia). */
+function showClockAgain() {
+  const was = clockEl?.classList.contains("cr-hidden"); renderClock();
+  if (clockEl && !clockEl.classList.contains("cr-hidden") && was !== false) requestAnimationFrame(() => { fitKey = ""; fitClock(); requestAnimationFrame(() => updateClock(true)); });
+}
+for (const h of ["combatStart", "updateCombat", "deleteCombat", "createCombat", "canvasReady"]) Hooks.on(h, () => setTimeout(showClockAgain, 50));
 function renderClock(force = false) {
   if (!game.user.isGM && !game.settings.get(ID, "playersSee")) { clockEl?.remove(); clockEl = null; clockKey = ""; return; }
   const r = game.settings.get(ID, "run") ?? {}; const gm = game.user.isGM; const key = JSON.stringify([gm, !!r.on, num(r.rate, 60), game.paused]);
   if (!clockEl) { clockEl = document.createElement("div"); clockEl.id = "cronos-clock"; if (game.user.isGM) clockEl.classList.add("gm"); document.body.appendChild(clockEl); bindClock(); force = true; }
-  clockEl.classList.toggle("cr-hidden", !!game.settings.get(ID, "hidden"));
+  clockEl.classList.toggle("cr-hidden", clockHidden());
   clockEl.classList.toggle("bottom", game.settings.get(ID, "dock") === "bottom"); fitClock();
   if (force || key !== clockKey) {
     clockKey = key; const c = cal();
@@ -271,7 +284,8 @@ function bandRects(sel, band, bottom, H, off = 0) {
   return out;
 }
 function fitClock() {
-  if (!clockEl) return; const W = window.innerWidth, H = window.innerHeight; const bottom = clockEl.classList.contains("bottom");
+  if (!clockEl) return; if (clockEl.classList.contains("cr-hidden")) { document.body.classList.remove("cronos-push"); fitKey = ""; return; } // escondido: não reserva espaço
+  const W = window.innerWidth, H = window.innerHeight; const bottom = clockEl.classList.contains("bottom");
   const ch = clockEl.offsetHeight || 64; const band = ch + GAP + 6;
   const off = document.body.classList.contains("cronos-push") ? (parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--cronos-band")) || 0) : 0; // mede como se não houvesse empurrão
   const L = bandRects("#ui-left > *, #ui-left > * > *, #atlas-dock .atlas-dock-panel, #atlas-dock .atlas-dock-tab, #scene-controls, #controls, #scene-navigation, #navigation", band, bottom, H, off).filter(r => r.left < W / 2);

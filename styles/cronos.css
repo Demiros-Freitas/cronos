@@ -301,3 +301,18 @@ li.cr-bound.cr-surge{transform-origin:0 50%;animation:cr-surge .6s cubic-bezier(
 #cronos-fase-banner strong{display:inline-flex;align-items:center;gap:14px;font:700 32px "Cinzel",serif;letter-spacing:.12em;text-transform:uppercase;color:var(--cf);text-shadow:0 0 18px color-mix(in srgb,var(--cf) 50%,transparent)}
 #cronos-fase-banner .cr-sig{width:10px;height:10px}
 @media (prefers-reduced-motion:reduce){#cronos-fase-banner{transition:none}}
+
+/* Início da Rodada já passou: cinza, como quem já agiu */
+li.cr-bound.passou{background:rgba(255,255,255,.015);border-color:#2c2823;box-shadow:none;animation:none}
+li.cr-bound.passou>*{opacity:.5;filter:grayscale(.85) brightness(.85)}
+li.cr-bound.passou:hover>*{opacity:.85;filter:grayscale(.4)}
+/* ações da rodada à mão, na etapa de Início ou Fim */
+.cr-tempo{--cf:#d8b45c;margin:-2px 4px 8px;padding:6px 8px 8px;border:1px solid color-mix(in srgb,var(--cf) 45%,transparent);border-radius:3px;background:linear-gradient(180deg,color-mix(in srgb,var(--cf) 10%,#100d0a),#0c0a08);animation:cr-abre .2s ease-out}
+.cr-tempo-tit{display:flex;align-items:center;gap:6px;margin-bottom:5px;font:600 .58rem "Cinzel",serif;letter-spacing:2px;text-transform:uppercase;color:var(--cf)}
+.cr-tempo-tit .cr-sig{width:6px;height:6px}
+.cr-tempo-lista{display:flex;flex-wrap:wrap;gap:5px}
+.cr-tempo-btn{flex:1 1 auto;display:inline-flex;align-items:center;gap:7px;width:auto;height:32px;margin:0;padding:0 10px 0 4px;font:700 .68rem "Cinzel",serif;letter-spacing:.5px;color:#f0e7d3;background:linear-gradient(180deg,#2a2419,#13100c);border:1px solid var(--cf);border-radius:3px;cursor:pointer;animation:cr-pronto 1.8s ease-in-out infinite}
+.cr-tempo-btn img{width:24px;height:24px;border:0;border-radius:2px;object-fit:cover}
+.cr-tempo-btn:hover:not(:disabled){filter:brightness(1.2);box-shadow:0 0 12px color-mix(in srgb,var(--cf) 60%,transparent)}
+.cr-tempo-btn:disabled{cursor:default;animation:none;opacity:.85}
+@media (prefers-reduced-motion:reduce){.cr-tempo-btn{animation:none}}

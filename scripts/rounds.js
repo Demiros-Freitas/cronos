@@ -98,15 +98,26 @@ export function hookRoundPhases() {
   });
   Hooks.on("combatStart", (cb) => setTimeout(() => { if (faseOf(cb) === "inicio") banner("inicio", cb.round); }, 300));
   Hooks.on("renderCombatTracker", (app, html) => { try { decorate(app, html instanceof HTMLElement ? html : html?.[0] ?? app.element); } catch (e) { console.warn(`${ID} | rastreador`, e); } });
-  Hooks.on("updateScene", (s, ch) => { if (ch?.flags?.[ID] && game.combat?.scene?.id === s.id) ui.combat?.render?.(); });
+  Hooks.on("updateScene", (s, ch) => { if (ch?.flags?.[ID] && sceneOf(game.combat)?.id === s.id) ui.combat?.render?.(); });
 }
 
 /* ================= itens do Início e do Fim da Rodada (guardados na cena) ================= */
 const sceneOf = (cb) => cb?.scene ?? canvas?.scene ?? null;
 const itensDe = (cb, tipo) => { const v = sceneOf(cb)?.getFlag?.(ID, "roundItems")?.[tipo]; return Array.isArray(v) ? v : []; };
-async function salvarItens(cb, tipo, lista) { const sc = sceneOf(cb); if (!sc || !game.user.isGM) return; const cur = foundry.utils.deepClone(sc.getFlag(ID, "roundItems") ?? {}); cur[tipo] = lista; await sc.setFlag(ID, "roundItems", cur); }
+async function salvarItens(cb, tipo, lista) { const sc = sceneOf(cb); if (!sc || !game.user.isGM) return; const cur = foundry.utils.deepClone(sc.getFlag(ID, "roundItems") ?? {}); cur[tipo] = lista; await sc.setFlag(ID, "roundItems", cur); ui.combat?.render?.(); }
+/** Item solto (do diretório ou de um compêndio) não tem quem o use: ele é copiado para um ator de apoio, "Ações da Rodada". */
+async function itemNoApoio(src) {
+  let a = game.actors.find(x => x.getFlag(ID, "apoio"));
+  if (!a) { const type = CONFIG.Actor?.dataModels?.npc || game.system.id === "dnd5e" ? "npc" : (game.documentTypes?.Actor ?? []).find(t => t !== "base") ?? "npc";
+    a = await Actor.create({ name: "Ações da Rodada", type, img: "icons/svg/clockwork.svg", flags: { [ID]: { apoio: true } } }); }
+  const data = src.toObject(); delete data._id; data.flags = { ...(data.flags ?? {}), [ID]: { origem: src.uuid } };
+  let it = a.items.find(i => i.getFlag(ID, "origem") === src.uuid);
+  if (it) await it.update({ name: data.name, img: data.img, system: data.system }); else [it] = await a.createEmbeddedDocuments("Item", [data]);
+  return a.items.get(it.id) ?? it;
+}
 async function usarItem(uuid) {
-  const it = await fromUuid(uuid); if (!it) return ui.notifications.warn("Cronos · o item não existe mais.");
+  let it = await fromUuid(uuid); if (!it) return ui.notifications.warn("Cronos · o item não existe mais.");
+  if (!it.actor && it.documentName === "Item" && game.user.isGM) { try { it = await itemNoApoio(it); } catch (e) { console.warn(`${ID} | ação da rodada`, e); } }
   if (typeof it.use === "function") return it.use();
   if (typeof it.roll === "function") return it.roll();
   return it.sheet?.render(true);
@@ -128,7 +139,7 @@ const VIRADA_MS = 1700;
 
 function decorate(app, root) {
   if (!root) return; const cb = game.combat; const doc = root.ownerDocument ?? document;
-  root.querySelectorAll(".cr-fase-box,.cr-acts,.cr-bound,.cr-bound-panel,.cr-grupo-head,.cr-badge").forEach(n => n.remove());
+  root.querySelectorAll(".cr-fase-box,.cr-acts,.cr-tempo,.cr-bound,.cr-bound-panel,.cr-grupo-head,.cr-badge").forEach(n => n.remove());
   root.classList.add("cr-tracker");
   const largura = () => root.classList.toggle("cr-wide", root.clientWidth >= 520); largura();
   if (!root._crRO) { const RO = doc.defaultView?.ResizeObserver ?? globalThis.ResizeObserver; if (RO) { root._crRO = new RO(largura); root._crRO.observe(root); } }
@@ -158,6 +169,11 @@ function decorate(app, root) {
       <button type="button" class="cr-act" data-cr-act="grupo" title="Formar um grupo (agem juntos, na vez do de maior iniciativa). Tokens selecionados já vêm marcados."><i class="fas fa-people-group"></i></button>
       <button type="button" class="cr-act cr-act-principal" data-cr-act="avancar"><span>${prox}</span><i class="fas fa-step-forward"></i></button></div>`));
   }
+  // na etapa de Início ou Fim da Rodada: as ações da rodada à mão, logo abaixo dos botões
+  if (f === "inicio" || f === "fim") { const its = itensDe(cb, f).filter(x => gm || x.show);
+    if (its.length) { const ref = root.querySelector(".cr-acts") ?? box;
+      ref.after(mk(`<div class="cr-tempo" style="--cf:${fi.cor}"><span class="cr-tempo-tit"><span class="cr-sig"></span>Ações ${f === "inicio" ? "do Início" : "do Fim"} da Rodada</span><div class="cr-tempo-lista">${its.map(x => { const it = fromUuidSync?.(x.uuid); const nome = it?.name ?? x.name ?? "Ação"; const img = it?.img ?? x.img ?? "icons/svg/clockwork.svg";
+        return `<button type="button" class="cr-tempo-btn" data-cr-act="usar" data-uuid="${esc(x.uuid)}" ${gm ? "" : "disabled"} title="${gm ? `Usar: ${esc(nome)}` : esc(nome)}"><img src="${esc(img)}" alt=""><span>${esc(nome)}</span></button>`; }).join("")}</div></div>`)); } }
   if (!list) return;
 
   // linhas: quem vai agir, Fim da Rodada, quem já agiu (cinza). Numeração cronológica.
@@ -188,7 +204,8 @@ function decorate(app, root) {
   // faixas do Início e do Fim da Rodada, com os itens
   const faixa = (tipo) => {
     const ativo = f === tipo; const aberto = ativo || abertos.has(tipo); const itens = itensDe(cb, tipo).filter(x => gm || x.show);
-    const row = mk(`<li class="cr-bound cr-bound-${tipo} ${ativo ? "ativo" : ""} ${aberto ? "aberto" : ""}" data-cr-bound="${tipo}" data-cr-key="b:${tipo}" title="${aberto ? "Recolher" : "Expandir"}">
+    const passou = tipo === "inicio" && f !== "inicio";
+    const row = mk(`<li class="cr-bound cr-bound-${tipo} ${ativo ? "ativo" : ""} ${passou ? "passou" : ""} ${aberto ? "aberto" : ""}" data-cr-bound="${tipo}" data-cr-key="b:${tipo}" title="${aberto ? "Recolher" : "Expandir"}">
       <span class="cr-sig"></span><span class="cr-bound-label">${FASES[tipo].nome}</span>${itens.length ? `<span class="cr-bound-n" title="Itens nesta faixa">${itens.length}</span>` : ""}<span class="cr-bound-round">R${cb.round}</span><i class="fas fa-chevron-down cr-bound-chev"></i></li>`);
     if (!aberto) return [row];
     const fx = tipo === "fim" && gm ? terminam(cb) : [];
@@ -197,7 +214,7 @@ function decorate(app, root) {
         ${gm ? `<button type="button" class="cr-item-mini" data-cr-act="ver" data-tipo="${tipo}" data-uuid="${esc(x.uuid)}" title="${x.show ? "Os jogadores veem: clique para esconder" : "Só você vê: clique para mostrar aos jogadores"}"><i class="fas ${x.show ? "fa-eye" : "fa-eye-slash"}"></i></button><button type="button" class="cr-item-mini" data-cr-act="tirar" data-tipo="${tipo}" data-uuid="${esc(x.uuid)}" title="Tirar desta faixa"><i class="fas fa-xmark"></i></button>` : ""}</div>`; }).join("");
     const panel = mk(`<li class="cr-bound-panel cr-bound-panel-${tipo}" data-cr-drop="${tipo}">
       ${chips ? `<div class="cr-itens">${chips}</div>` : gm ? "" : `<span class="cr-vazio">Nada acontece ${tipo === "inicio" ? "no início" : "no fim"} da rodada.</span>`}
-      ${gm ? `<div class="cr-drop"><i class="fas fa-hand-pointer"></i> Arraste um item para cá (ação de covil, efeito do lugar…)</div>` : ""}
+      ${gm ? `<div class="cr-drop"><i class="fas fa-hand-pointer"></i> Arraste um item para cá: vira uma ação da rodada (covil, efeito do lugar…)</div>` : ""}
       ${fx.length ? `<div class="cr-terminam"><span class="cr-panel-title">Terminam agora</span>${fx.map(t => `<span>${esc(t)}</span>`).join("")}</div>` : ""}</li>`);
     return [row, panel];
   };

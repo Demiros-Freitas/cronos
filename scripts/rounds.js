@@ -107,27 +107,22 @@ export function hookRoundPhases() {
 const sceneOf = (cb) => cb?.scene ?? canvas?.scene ?? null;
 const itensDe = (cb, tipo) => { const v = sceneOf(cb)?.getFlag?.(ID, "roundItems")?.[tipo]; return Array.isArray(v) ? v : []; };
 async function salvarItens(cb, tipo, lista) { const sc = sceneOf(cb); if (!sc || !game.user.isGM) return; const cur = foundry.utils.deepClone(sc.getFlag(ID, "roundItems") ?? {}); cur[tipo] = lista; await sc.setFlag(ID, "roundItems", cur); ui.combat?.render?.(); }
-/** Item solto (do diretório ou de um compêndio) não tem quem o use: ele é copiado para um ator de apoio, "Ações da Rodada". */
-async function itemNoApoio(src) {
-  let a = game.actors.find(x => x.getFlag(ID, "apoio"));
-  if (!a) { const type = CONFIG.Actor?.dataModels?.npc || game.system.id === "dnd5e" ? "npc" : (game.documentTypes?.Actor ?? []).find(t => t !== "base") ?? "npc";
-    a = await Actor.create({ name: "Ações da Rodada", type, img: "icons/svg/clockwork.svg", flags: { [ID]: { apoio: true } } }); }
-  const data = src.toObject(); delete data._id; data.flags = { ...(data.flags ?? {}), [ID]: { origem: src.uuid } };
-  let it = a.items.find(i => i.getFlag(ID, "origem") === src.uuid);
-  if (it) await it.update({ name: data.name, img: data.img, system: data.system }); else [it] = await a.createEmbeddedDocuments("Item", [data]);
-  return a.items.get(it.id) ?? it;
-}
-/** Macros marcadas como automáticas rodam sozinhas quando a rodada chega à faixa (uma vez por rodada; voltar etapas não repete). */
-const jaRodou = new Set();
-async function autoMacros(cb, fase) {
-  if (!isActiveGM()) return; const k = `${cb.id}|${cb.round}|${fase}`; if (jaRodou.has(k)) return; jaRodou.add(k);
-  for (const x of itensDe(cb, fase)) { if (x.kind !== "Macro" || x.auto === false) continue;
-    try { const m = await fromUuid(x.uuid); await m?.execute?.({ combat: cb, round: cb.round, fase, cronos: true }); } catch (e) { console.warn(`${ID} | macro da rodada`, e); ui.notifications.warn(`Cronos · a macro "${x.name}" deu erro (veja o console).`); } }
+/** Item solto (do diretório ou de um compêndio): o D&D só usa itens que estão numa ficha. Em vez de criar um ator, o Cronos
+ *  monta uma cópia temporária (que não é salva) presa a um ator que já existe — de preferência um inimigo do combate — e o
+ *  cartão sai no chat como "Ações da Rodada". Os botões do cartão (teste, dano) funcionam, porque os dados vão junto na mensagem. */
+function anfitriao(cb) {
+  const npc = (a) => a && a.type !== "character" && a.type !== "group";
+  return cb?.combatants?.contents?.map(c => c.actor).find(npc) ?? game.actors.find(npc) ?? cb?.combatants?.contents?.[0]?.actor ?? game.actors.contents[0] ?? null;
 }
 async function usarItem(uuid) {
   let it = await fromUuid(uuid); if (!it) return ui.notifications.warn("Cronos · o item não existe mais.");
   if (it.documentName === "Macro") { const cb = game.combat; return it.execute({ combat: cb, round: cb?.round, fase: faseOf(cb), cronos: true }); }
-  if (!it.actor && it.documentName === "Item" && game.user.isGM) { try { it = await itemNoApoio(it); } catch (e) { console.warn(`${ID} | ação da rodada`, e); } }
+  if (!it.actor && it.documentName === "Item" && game.user.isGM) {
+    const host = anfitriao(game.combat); if (!host) return ui.notifications.warn("Cronos · para usar este item, crie pelo menos um ator no mundo (ou arraste o item da ficha de quem o usa).");
+    const data = it.toObject(); const tmp = new Item.implementation(data, { parent: host });
+    const speaker = { scene: canvas?.scene?.id ?? null, actor: host.id, token: null, alias: "Ações da Rodada" };
+    try { return await tmp.use({ consume: false }, {}, { data: { speaker, flags: { dnd5e: { item: { data } } } } }); }
+    catch (e) { console.warn(`${ID} | ação da rodada`, e); return it.sheet?.render(true); } }
   if (typeof it.use === "function") return it.use();
   if (typeof it.roll === "function") return it.roll();
   return it.sheet?.render(true);

@@ -93,17 +93,52 @@ function register() {
 }
 /** Passa o calendário para o Foundry também (outros módulos e a ficha usam o calendário do mundo). */
 let synced = false;
+/** Índice da estação (na ordem do ano) de uma data, ou null. */
+function seasonIdx(D, c = cal()) { const list = [...(c.seasons ?? [])].map(s => doyOf(c, s.month, s.day)).sort((a, b) => a - b); if (!list.length) return null; let k = list.length - 1; list.forEach((d, i) => { if (D.doy >= d) k = i; }); return k; }
+/** O calendário do Foundry (e o do D&D, que herda dele) passa a contar os dias pela matemática do Cronos:
+ *  dias intercalares fora da semana, semana que recomeça no ano, estações… Assim tudo que mostra data no Foundry bate com o relógio. */
+function cronosCalendarClass() {
+  const Base = CONFIG.time.worldCalendarClass; if (!Base || Base.__cronos) return Base;
+  class CronosCalendar extends Base {
+    timeToComponents(time = 0) {
+      try { const c = cal(); const D = toDate(time, c);
+        return { day: D.doy, dayOfMonth: D.day - 1, dayOfWeek: D.weekday ?? 0, hour: D.hour, leapYear: false, minute: D.minute, month: D.month, season: seasonIdx(D, c) ?? undefined, second: D.second, year: D.yi, intercalary: !!D.intercalary };
+      } catch (e) { return super.timeToComponents(time); }
+    }
+  }
+  CronosCalendar.__cronos = true; CronosCalendar.__base = Base; return CronosCalendar;
+}
 function syncFoundry() {
   if (!synced && !game.ready) return; // só depois que o Foundry montou o próprio calendário (nunca atrapalha o carregamento)
-  const prev = CONFIG.time?.worldCalendarConfig;
+  const prev = CONFIG.time?.worldCalendarConfig, prevClass = CONFIG.time?.worldCalendarClass;
   try {
-    const c = cal(); if (!CONFIG.time) return;
-    CONFIG.time.worldCalendarConfig = { name: c.name, description: "", years: { yearZero: c.yearZero, firstWeekday: 0, leapYear: null },
+    const c = cal(); if (!CONFIG.time) return; const dpy = dpyOf(c);
+    const ss = [...(c.seasons ?? [])].map(s => ({ name: s.name, d: doyOf(c, s.month, s.day), m: s.month })).sort((a, b) => a.d - b.d);
+    const seasons = ss.map((s, i) => { const nx = ss[(i + 1) % ss.length]; const end = ((nx.d - 1 + dpy) % dpy); return { name: s.name, abbreviation: s.name.slice(0, 3), monthStart: s.m + 1, monthEnd: null, dayStart: s.d + 1, dayEnd: end + 1 }; })
+      .map(s => ({ ...s, monthEnd: s.monthStart }));
+    CONFIG.time.worldCalendarConfig = { name: c.name, description: "Calendário do Cronos", years: { yearZero: c.yearZero, firstWeekday: 0, leapYear: null },
       months: { values: c.months.map((m, i) => ({ name: m.name, abbreviation: m.name.slice(0, 3), ordinal: i + 1, days: m.days, leapDays: m.days, intercalary: m.intercalary })) },
-      days: { values: c.weekdays.map((n, i) => ({ name: n, abbreviation: n.slice(0, 3), ordinal: i + 1 })), daysPerYear: dpyOf(c), hoursPerDay: c.hoursPerDay, minutesPerHour: c.minutesPerHour, secondsPerMinute: c.secondsPerMinute },
-      seasons: { values: [] } };
+      days: { values: c.weekdays.map((n, i) => ({ name: n, abbreviation: n.slice(0, 3), ordinal: i + 1 })), daysPerYear: dpy, hoursPerDay: c.hoursPerDay, minutesPerHour: c.minutesPerHour, secondsPerMinute: c.secondsPerMinute },
+      seasons: { values: seasons } };
+    const K = cronosCalendarClass(); if (K) CONFIG.time.worldCalendarClass = K;
     game.time?.initializeCalendar?.(); synced = true;
-  } catch (e) { console.warn(`${ID} | não deu para passar o calendário ao Foundry (o Cronos continua funcionando)`, e); try { CONFIG.time.worldCalendarConfig = prev; game.time?.initializeCalendar?.(); } catch (er) { /* */ } }
+    try { ui.calendar?.render?.(); globalThis.dnd5e?.ui?.calendar?.render?.(); } catch (e) { /* */ }
+  } catch (e) { console.warn(`${ID} | não deu para passar o calendário ao Foundry (o Cronos continua funcionando)`, e); try { CONFIG.time.worldCalendarConfig = prev; CONFIG.time.worldCalendarClass = prevClass; game.time?.initializeCalendar?.(); } catch (er) { /* */ } }
+}
+/** Calendários que vêm com o Foundry e com o D&D (gregoriano, Greyhawk, Harptos, Khorvaire…), para começar o do Cronos a partir deles. */
+export function foundryPresets() {
+  const out = []; const L = (s) => { try { return game.i18n.localize(String(s ?? "")); } catch (e) { return String(s ?? ""); } };
+  for (const k of game.system?.id === "dnd5e" ? (CONFIG.DND5E?.calendar?.calendars ?? []) : []) if (k?.config?.months) out.push({ label: L(k.label), cfg: k.config });
+  const greg = foundry.data?.SIMPLIFIED_GREGORIAN_CALENDAR_CONFIG; if (greg && !out.some(o => o.cfg === greg)) out.push({ label: "Gregoriano (Foundry)", cfg: greg });
+  return out.map(o => ({ ...o, L }));
+}
+export function fromFoundry({ label, cfg, L }) {
+  const months = (cfg.months?.values ?? []).map(m => ({ name: L(m.name), days: Math.max(1, Number(m.days) || 1), intercalary: !!m.intercalary }));
+  const at = (doy0) => { let acc = 0; for (let i = 0; i < months.length; i++) { if (doy0 < acc + months[i].days) return { month: i, day: doy0 - acc + 1 }; acc += months[i].days; } return { month: 0, day: 1 }; };
+  const seasons = (cfg.seasons?.values ?? []).map(s => ({ name: L(s.name), ...(Number.isFinite(s.dayStart) ? at(s.dayStart - 1) : { month: Math.max(0, (s.monthStart ?? 1) - 1), day: 1 }) }));
+  const d = cfg.days ?? {}; const spring = seasons.find(s => /spring|primavera/i.test(s.name)) ?? seasons[0];
+  return normCal({ name: L(cfg.name) || label, yearZero: cfg.years?.yearZero ?? 0, era: "", hoursPerDay: d.hoursPerDay ?? 24, minutesPerHour: d.minutesPerHour ?? 60, secondsPerMinute: d.secondsPerMinute ?? 60,
+    months, weekdays: (d.values ?? []).map(w => L(w.name)), weekResets: false, seasons, equinox: spring ? { month: spring.month, day: spring.day } : undefined });
 }
 
 /* ================= eventos (notas do calendário) ================= */
@@ -429,7 +464,9 @@ function toggleConfig() { if (cfgEl) { cfgEl.remove(); cfgEl = null; return; } c
 let draft = null;
 function renderCfg() {
   if (!cfgEl) return; draft ??= structuredClone(cal()); const c = draft;
+  const fp = foundryPresets();
   cfgEl.querySelector(".cp-body").innerHTML = `<div class="cf-presets">Começar de: ${Object.entries(PRESETS).map(([k, p]) => `<button data-cp="${k}">${esc(p.name)}</button>`).join("")}</div>
+    ${fp.length ? `<div class="cf-presets">Do Foundry e do sistema: ${fp.map((p, i) => `<button data-fp="${i}" title="Copia meses, semana e estações (anos bissextos ficam de fora)">${esc(p.label)}</button>`).join("")}</div>` : ""}
     <label>Nome<input data-cf="name" value="${esc(c.name)}"></label>
     <div class="cf-row"><label>Ano em que o relógio começa<input type="number" data-cf="yearZero" value="${c.yearZero}"></label><label>Era (ex.: DR)<input data-cf="era" value="${esc(c.era)}"></label></div>
     <div class="cf-row"><label>Horas por dia<input type="number" min="1" data-cf="hoursPerDay" value="${c.hoursPerDay}"></label><label>Minutos por hora<input type="number" min="1" data-cf="minutesPerHour" value="${c.minutesPerHour}"></label><label>Segundos por minuto<input type="number" min="1" data-cf="secondsPerMinute" value="${c.secondsPerMinute}"></label></div>
@@ -448,8 +485,9 @@ function bindCfg() {
     if (el.dataset.cf) { const k = el.dataset.cf; if (k === "weekdays") c.weekdays = String(v).split(",").map(s => s.trim()).filter(Boolean); else if (k === "eqm") c.equinox = { ...(c.equinox ?? {}), month: Number(v) }; else if (k === "eqd") c.equinox = { ...(c.equinox ?? {}), day: Number(v) }; else c[k] = el.type === "number" ? Number(v) : v; }
     if (el.dataset.cm != null) { const m = c.months[Number(el.dataset.cm)]; m[el.dataset.k] = el.dataset.k === "days" ? Number(v) : v; }
     if (el.dataset.cs != null) { const s = c.seasons[Number(el.dataset.cs)]; s[el.dataset.k] = el.dataset.k === "name" ? v : Number(v); } });
-  cfgEl.addEventListener("click", async (e) => { const b = e.target.closest("[data-cmd],[data-cp]"); if (!b) return; const c = draft;
+  cfgEl.addEventListener("click", async (e) => { const b = e.target.closest("[data-cmd],[data-cp],[data-fp]"); if (!b) return; const c = draft;
     if (b.dataset.cp) { draft = structuredClone(PRESETS[b.dataset.cp]); return renderCfg(); }
+    if (b.dataset.fp != null) { const p = foundryPresets()[Number(b.dataset.fp)]; if (p) { draft = structuredClone(fromFoundry(p)); ui.notifications.info(`Cronos · ${p.label} carregado. Confira e salve.`); } return renderCfg(); }
     const i = Number(b.dataset.i); switch (b.dataset.cmd) {
       case "add": c.months.push({ name: `Mês ${c.months.length + 1}`, days: 30 }); break;
       case "del": c.months.splice(i, 1); break;

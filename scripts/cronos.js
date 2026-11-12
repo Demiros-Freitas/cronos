@@ -1,6 +1,7 @@
 // Cronos · irmão do Atlas. Calendário do mundo, controle do tempo (como um player) e eventos do ano.
 // O tempo é sempre o relógio do Foundry (game.time.worldTime); o Cronos só dá nome aos dias e o faz andar.
 import { togglePop } from "./popout.js";
+import { registerRoundSettings, hookRoundPhases } from "./rounds.js";
 const ID = "brumas-cronos";
 const esc = (s) => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 const num = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
@@ -255,7 +256,7 @@ function updateClock(full = false) {
   // mostrador: o céu do Atlas visto daqui (se houver mapa celeste); senão, um céu simples pela hora
   const ds = parseInt(getComputedStyle(clockEl).getPropertyValue("--dial")) || 74; let sky = null; try { sky = api?.skyDial?.(t, ds) ?? null; } catch (e) { /* */ }
   q(".cr-dsky").innerHTML = sky ?? simpleDial(dayP, moons, wx, ds, t);
-  const bar = q(".cr-bar"); if (bar) { const bw = bar.clientWidth; let h = null; if (bw > 80) { try { h = api?.skyBar?.(bw, undefined, bar.clientHeight || 46, hid ? periodOf(t) : null) ?? null; } catch (e) { /* */ } } bar.innerHTML = h ?? ""; bar.classList.toggle("empty", !h); }
+  const bar = q(".cr-bar"); if (bar) { bar.classList.remove("empty"); const bw = bar.clientWidth; /* mede sem o "vazio", que esconde a faixa e zera a largura */ let h = null; if (bw > 80) { try { h = api?.skyBar?.(bw, undefined, bar.clientHeight || 46, hid ? periodOf(t) : null) ?? null; } catch (e) { /* */ } } bar.innerHTML = h ?? ""; bar.classList.toggle("empty", !h); }
 }
 /** Céu simples (sem o Atlas): cor pela hora, sol e lua num arco, nuvens pelo clima. */
 function simpleDial(dayP, moons, wx, size, t) {
@@ -298,7 +299,9 @@ function fitClock() {
   clockEl.style.width = `${w}px`; clockEl.style.left = `${Math.round((lo + hi) / 2)}px`;
   document.body.classList.toggle("cronos-push", push); document.body.classList.toggle("cronos-bottom", bottom);
   document.documentElement.style.setProperty("--cronos-band", `${band}px`); document.documentElement.style.setProperty("--cronos-top-gap", bottom ? "12px" : `${Math.round(ch + 14)}px`);
-  clockEl.classList.toggle("wide", w >= 720);
+  const wasWide = clockEl.classList.contains("wide"); clockEl.classList.toggle("wide", w >= 720);
+  if (w >= 720) requestAnimationFrame(() => updateClock(true)); // largura mudou: a faixa do céu é redesenhada no tamanho novo
+  void wasWide;
 }
 setInterval(() => { try { fitClock(); } catch (e) { /* */ } }, 700); // painéis abrem e fecham o tempo todo: confere sempre
 window.addEventListener("resize", () => fitClock());
@@ -464,7 +467,8 @@ let raf = null; function refreshAll() { if (raf) return; raf = requestAnimationF
 /** O relógio do mundo andou: só os textos do relógio mudam; o calendário só é redesenhado quando o dia muda. */
 let lastDay = null;
 function onTime() { markTime(); updateClock(true); animLoop(); const D = toDate(game.time.worldTime); const k = `${D.year}|${D.doy}`; if (k !== lastDay) { lastDay = k; renderCal(); } }
-Hooks.once("init", () => { register(); });
+Hooks.once("init", () => { register(); try { registerRoundSettings(); } catch (e) { console.warn(`${ID} | etapas`, e); } });
+Hooks.once("ready", () => { try { hookRoundPhases(); } catch (e) { console.warn(`${ID} | etapas`, e); } });
 Hooks.once("ready", () => {
   syncFoundry(); markTime(); startTicker(); renderClock(); animLoop();
   const mod = game.modules.get(ID);

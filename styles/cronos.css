@@ -167,3 +167,28 @@ body.brumas-popout .cronos-panel.brumas-pop-el .cp-body{flex:1 1 auto;overflow:a
 #cronos-cal .cc-nav button.on{background:var(--gold);color:var(--ink);border-color:var(--gold)}
 
 #cronos-clock.cr-hidden{display:none!important}
+
+/* ---------- etapas da rodada (rastreador de combate, faixa e chat) ---------- */
+.cronos-fase{--cf:#d8b45c;display:flex;flex-direction:column;align-items:center;gap:2px;margin:6px 8px;padding:8px 10px 9px;border-radius:10px;border:1px solid color-mix(in srgb,var(--cf) 60%,transparent);background:linear-gradient(180deg,color-mix(in srgb,var(--cf) 18%,#14171c),#14171c);text-align:center}
+.cronos-fase .cf-kicker{font:600 10px "IBM Plex Sans",sans-serif;letter-spacing:.14em;text-transform:uppercase;color:#aaa395}
+.cronos-fase .cf-name{font:700 17px "Cinzel",serif;color:var(--cf);text-shadow:0 0 12px color-mix(in srgb,var(--cf) 45%,transparent)}
+.cronos-fase .cf-sub{font-size:12px;color:#ece6d6}
+.cronos-fase .cf-hint{font-size:11px;color:#aaa395;font-style:italic}
+.cronos-fase .cf-trilha{display:flex;align-items:center;gap:0;margin-top:4px}
+.cronos-fase .cf-pip{width:10px;height:10px;border-radius:50%;border:2px solid var(--cp);background:transparent;opacity:.5}
+.cronos-fase .cf-pip.feito{background:var(--cp);opacity:.6}
+.cronos-fase .cf-pip.atual{background:var(--cp);opacity:1;box-shadow:0 0 8px var(--cp)}
+.cronos-fase .cf-fio{width:26px;height:2px;background:#4a4f5a}
+.cronos-roundphase .combatant.active{background:transparent!important;box-shadow:none!important;outline:none!important;opacity:.85}
+#cronos-fase-banner{--cf:#d8b45c;position:fixed;left:50%;top:32%;transform:translate(-50%,-50%) scale(.92);z-index:200;pointer-events:none;display:flex;flex-direction:column;align-items:center;gap:2px;padding:14px 46px 16px;background:linear-gradient(90deg,transparent,rgba(14,16,22,.92) 18%,rgba(14,16,22,.92) 82%,transparent);border-top:1px solid color-mix(in srgb,var(--cf) 70%,transparent);border-bottom:1px solid color-mix(in srgb,var(--cf) 70%,transparent);opacity:0;transition:opacity .45s ease,transform .45s ease}
+#cronos-fase-banner.show{opacity:1;transform:translate(-50%,-50%) scale(1)}
+#cronos-fase-banner .cfb-kicker{font:600 12px "IBM Plex Sans",sans-serif;letter-spacing:.2em;text-transform:uppercase;color:#cfc6b2}
+#cronos-fase-banner strong{font:700 34px "Cinzel",serif;color:var(--cf);text-shadow:0 0 18px color-mix(in srgb,var(--cf) 50%,transparent)}
+@media (prefers-reduced-motion:reduce){#cronos-fase-banner{transition:none}}
+.cronos-fase-chat{--cf:#d8b45c;border-left:3px solid var(--cf);padding:2px 0 2px 8px}
+.cronos-fase-chat .cfc-head{display:flex;flex-direction:column}
+.cronos-fase-chat .cfc-head span{font-size:10px;letter-spacing:.12em;text-transform:uppercase;opacity:.75}
+.cronos-fase-chat .cfc-head strong{font:700 15px "Cinzel",serif;color:var(--cf)}
+.cronos-fase-chat .cfc-time{margin:4px 0;font-size:12px;opacity:.85}
+.cronos-fase-chat .cfc-lab{margin:6px 0 2px;font-weight:700;font-size:12px}
+.cronos-fase-chat ul{margin:0;padding-left:16px}

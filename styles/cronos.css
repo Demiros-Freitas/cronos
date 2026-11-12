@@ -332,3 +332,15 @@ li.cr-bound-panel.cr-bound-panel-covil{--cf:#9b7be0;border-bottom-color:rgba(130
 .cr-item-usar.usada::after,.cr-tempo-btn.usada::after{content:"✓";margin-left:6px;color:var(--cf)}
 .cr-act.cr-act-covil{display:inline-flex;align-items:center;gap:6px;color:#c9b6f2;border-color:rgba(155,123,224,.55)}
 .cr-act.cr-act-covil:hover{color:#efe6ff;border-color:#9b7be0}
+/* ações lendárias: separador logo depois de quem está agindo */
+li.cr-bound.cr-bound-lendaria{--cf:#5fa8a0;color:#9fd3cb;background:linear-gradient(90deg,rgba(60,140,130,.2),rgba(0,0,0,.55) 60%);border-color:rgba(80,160,150,.4);min-height:24px}
+li.cr-bound.cr-bound-lendaria.ativo{color:#d6f4ef;border-color:#5fa8a0;box-shadow:inset 3px 0 0 #5fa8a0,0 0 8px rgba(95,168,160,.35);animation:none}
+li.cr-bound.cr-bound-lendaria .cr-bound-label{flex:0 0 auto}
+.cr-bound-quem{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font:italic .72rem "Crimson Text",serif;letter-spacing:0;text-transform:none;color:#a89f8f}
+.cr-pips{display:inline-flex;gap:2px;margin-left:4px;vertical-align:middle}
+.cr-pips i{display:block;width:7px;height:7px;transform:rotate(45deg);border:1px solid #5fa8a0;background:transparent}
+.cr-pips i.on{background:#5fa8a0;box-shadow:0 0 4px #5fa8a0}
+li.cr-bound-panel.cr-bound-panel-lendaria{--cf:#5fa8a0;border-bottom-color:rgba(80,160,150,.3)}
+.cr-lend{margin-bottom:6px}.cr-lend:last-child{margin-bottom:0}
+.cr-lend-nome{display:flex;align-items:center;gap:4px;margin-bottom:3px;font:600 .72rem "Cinzel",serif;color:#e8dcc0}
+.cr-lend-nome small{margin-left:6px;font:italic .72rem "Crimson Text",serif;color:#8a8276}

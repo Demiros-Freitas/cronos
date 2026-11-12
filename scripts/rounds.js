@@ -50,6 +50,16 @@ const covilInits = (cb) => [...new Set(covisOf(cb).map(x => Number(x.init) || 20
 const feitosDe = (cb) => { const f = cb?.getFlag?.(ID, "covilFeitos"); return f?.round === cb?.round && Array.isArray(f.inits) ? f.inits : []; };
 /** Contagem de covil ainda por acontecer entre quem acabou de agir (hi) e o próximo (lo). Em empate, o covil vem depois. */
 const covilEntre = (cb, hi, lo, feitos = feitosDe(cb)) => covilInits(cb).find(L => !feitos.includes(L) && hi >= L && L > lo);
+/* ================= ações lendárias (ao fim do turno de outra criatura) ================= */
+const tipoAtiv = (it) => { const acts = it.system?.activities; const t = acts?.find?.(x => ["legendary", "mythic"].includes(x.activation?.type)); return t ? { tipo: t.activation.type, custo: Number(t.activation.value) || 1 } : (["legendary", "mythic"].includes(it.system?.activation?.type) ? { tipo: it.system.activation.type, custo: Number(it.system.activation.cost) || 1 } : null); };
+/** Criaturas com ações lendárias no combate: pontos que restam e as ações (com custo). */
+export function lendarios(cb) {
+  const out = []; const seen = new Set();
+  for (const c of cb?.combatants ?? []) { const a = c.actor; const L = a?.system?.resources?.legact; if (!a || !(L?.max > 0) || c.defeated || seen.has(c.id)) continue; seen.add(c.id);
+    const acoes = (a.items ?? []).map(it => { const t = tipoAtiv(it); return t ? { uuid: it.uuid, name: it.name, img: it.img, ...t } : null; }).filter(Boolean);
+    out.push({ c, nome: c.name, val: Number(L.value ?? L.max) || 0, max: L.max, acoes }); }
+  return out;
+}
 /** Procura nos atores do combate os itens com atividade "Ação de covil" (ou ativação de covil, nas fichas antigas). */
 export function buscarCovil(cb) {
   const out = []; const seen = new Set();
@@ -135,6 +145,7 @@ export function hookRoundPhases() {
   });
   Hooks.on("combatStart", (cb) => setTimeout(() => { if (faseOf(cb) === "inicio") banner("inicio", cb.round); }, 300));
   Hooks.on("renderCombatTracker", (app, html) => { try { decorate(app, html instanceof HTMLElement ? html : html?.[0] ?? app.element); } catch (e) { console.warn(`${ID} | rastreador`, e); } });
+  Hooks.on("updateActor", (a, ch) => { if (ch?.system?.resources?.legact && game.combat?.combatants?.some(c => c.actorId === a.id || c.actor === a)) ui.combat?.render?.(); });
   Hooks.on("updateScene", (s, ch) => { if (ch?.flags?.[ID] && sceneOf(game.combat)?.id === s.id) ui.combat?.render?.(); });
 }
 
@@ -281,6 +292,18 @@ function decorate(app, root) {
   };
   const ini = faixa("inicio"); list.prepend(...ini);
   const fim = faixa("fim"); const primPassado = foram[0]?.el; if (primPassado) primPassado.before(...fim); else list.append(...fim);
+  // ações lendárias: separador logo depois de quem está agindo (no fim do turno dele, os outros podem usar)
+  if (gm && f === "turnos" && daVez) { const Lg = lendarios(cb);
+    if (Lg.length) { const proprio = new Set(daVez.membros.map(m => m.id)); const disp = Lg.filter(x => !proprio.has(x.c.id) && x.val > 0); const aberto = abertaFaixa("lendaria", disp.length > 0);
+      const pips = (x) => `<span class="cr-pips" title="${x.val}/${x.max} ações lendárias">${Array.from({ length: x.max }, (_, i) => `<i class="${i < x.val ? "on" : ""}"></i>`).join("")}</span>`;
+      const row = mk(`<li class="cr-bound cr-bound-lendaria ${disp.length ? "ativo" : "passou"} ${aberto ? "aberto" : ""}" data-cr-bound="lendaria" data-cr-key="b:lendaria" title="${aberto ? "Recolher" : "Expandir"}">
+        <span class="cr-sig"></span><span class="cr-bound-label">Ações Lendárias</span><span class="cr-bound-quem">ao fim do turno de ${esc(nomeVez)}</span>${Lg.map(x => pips(x)).join("")}<i class="fas fa-chevron-down cr-bound-chev"></i></li>`);
+      const rows = [row];
+      if (aberto) rows.push(mk(`<li class="cr-bound-panel cr-bound-panel-lendaria">${Lg.map(x => { const dele = proprio.has(x.c.id);
+        return `<div class="cr-lend"><span class="cr-lend-nome">${esc(x.nome)} ${pips(x)}${dele ? `<small>no próprio turno, não</small>` : x.val ? "" : `<small>sem ações; recupera no fim do turno dele</small>`}</span>
+          <div class="cr-itens">${x.acoes.length ? x.acoes.map(a => `<div class="cr-item ${!dele && a.custo <= x.val ? "pronto" : ""}"><button type="button" class="cr-item-usar" data-cr-act="usar" data-uuid="${esc(a.uuid)}" ${!dele && a.custo <= x.val ? "" : "disabled"} title="${esc(a.name)} · custa ${a.custo}"><img src="${esc(a.img || "icons/svg/aura.svg")}" alt=""><span>${esc(a.name)}<small> · ${a.custo}</small></span></button></div>`).join("") : `<span class="cr-vazio">Nenhuma ação marcada como lendária na ficha.</span>`}</div></div>`; }).join("")}</li>`));
+      const cur = vao.find(b => b.e === daVez); const prox = cur ? vao[vao.indexOf(cur) + 1]?.el : null;
+      if (prox) prox.before(...rows); else fim[0].before(...rows); } }
   // contagens de covil: separadores no meio da ordem, na posição da iniciativa (depois de quem empatou)
   const uso = cb.getFlag(ID, "covilUso") ?? {};
   for (const L of Ls) {

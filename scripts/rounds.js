@@ -22,6 +22,7 @@ export const faseOf = (cb) => cb?.started ? (cb.getFlag?.(ID, "fase") ?? "turnos
 
 export function registerRoundSettings() {
   game.settings.register(ID, "roundPhases", { name: "Início e Fim da Rodada no combate", hint: "O rastreador de combate ganha as faixas de Início e Fim da Rodada (com espaço para itens, como ações de covil), a ordem numerada, os grupos e as animações. A iniciativa continua a do sistema.", scope: "world", config: true, type: Boolean, default: true, requiresReload: true });
+  game.settings.register(ID, "boundsOpen", { scope: "client", config: false, type: Object, default: {} });
   game.settings.register(ID, "phaseBanner", { name: "Faixa na tela ao virar a rodada", hint: "Mostra por um instante \"Início da Rodada 2\" ou \"Fim da Rodada 2\" no meio da tela.", scope: "client", config: true, type: Boolean, default: true });
 }
 
@@ -141,7 +142,11 @@ function terminam(cb) {
 }
 
 /* ================= desenho do rastreador ================= */
-const abertos = new Set(); const gruposAbertos = new Set();
+// faixas abertas ou fechadas: a escolha de quem clicou vale sempre (fica salva); sem escolha, a faixa da etapa atual abre sozinha
+const escolha = () => { try { return { ...(game.settings.get(ID, "boundsOpen") ?? {}) }; } catch (e) { return {}; } };
+const abertaFaixa = (tipo, ativo) => { const e = escolha()[tipo]; return typeof e === "boolean" ? e : ativo; };
+const escolher = async (tipo, v) => { const e = escolha(); e[tipo] = v; try { await game.settings.set(ID, "boundsOpen", e); } catch (er) { /* */ } ui.combat?.render?.(); };
+const gruposAbertos = new Set();
 const posAnt = new Map(); // chave da linha -> posição na última vez (para as linhas deslizarem)
 const rodadaVista = new Map(); let virada = null; // { combatId, round, t0 }
 const VIRADA_MS = 1700;
@@ -212,7 +217,7 @@ function decorate(app, root) {
 
   // faixas do Início e do Fim da Rodada, com os itens
   const faixa = (tipo) => {
-    const ativo = f === tipo; const aberto = ativo || abertos.has(tipo); const itens = itensDe(cb, tipo).filter(x => gm || x.show);
+    const ativo = f === tipo; const aberto = abertaFaixa(tipo, ativo); const itens = itensDe(cb, tipo).filter(x => gm || x.show);
     const passou = tipo === "inicio" && f !== "inicio";
     const row = mk(`<li class="cr-bound cr-bound-${tipo} ${ativo ? "ativo" : ""} ${passou ? "passou" : ""} ${aberto ? "aberto" : ""}" data-cr-bound="${tipo}" data-cr-key="b:${tipo}" title="${aberto ? "Recolher" : "Expandir"}">
       <span class="cr-sig"></span><span class="cr-bound-label">${FASES[tipo].nome}</span>${itens.length ? `<span class="cr-bound-n" title="Itens nesta faixa">${itens.length}</span>` : ""}<span class="cr-bound-round">R${cb.round}</span><i class="fas fa-chevron-down cr-bound-chev"></i></li>`);
@@ -273,7 +278,7 @@ async function onClick(ev, root) {
     if (act === "tirar" || act === "ver" || act === "auto") { const t = a.dataset.tipo; const l = itensDe(cb, t).map(x => ({ ...x }));
       const i = l.findIndex(x => x.uuid === a.dataset.uuid); if (i < 0) return; if (act === "tirar") l.splice(i, 1); else if (act === "auto") l[i].auto = l[i].auto === false; else l[i].show = !l[i].show; return salvarItens(cb, t, l); }
     return; }
-  const b = ev.target.closest?.("[data-cr-bound]"); if (b) { const t = b.dataset.crBound; abertos.has(t) ? abertos.delete(t) : abertos.add(t); return ui.combat?.render?.(); }
+  const b = ev.target.closest?.("[data-cr-bound]"); if (b) { const t = b.dataset.crBound; return escolher(t, !b.classList.contains("aberto")); }
   const g = ev.target.closest?.("[data-cr-grupo]"); if (g && !ev.target.closest("li.combatant")) { const id = g.dataset.crGrupo; gruposAbertos.has(id) ? gruposAbertos.delete(id) : gruposAbertos.add(id); return ui.combat?.render?.(); }
 }
 async function onDrop(ev) {
@@ -283,7 +288,7 @@ async function onDrop(ev) {
   const it = await fromUuid(d.uuid); const cb = game.combat; const tipo = z.dataset.crDrop ?? z.dataset.crBound; const l = itensDe(cb, tipo).map(x => ({ ...x }));
   if (l.some(x => x.uuid === d.uuid)) return;
   l.push(d.type === "Macro" ? { uuid: d.uuid, kind: "Macro", name: it?.name ?? "Macro", img: it?.img ?? "", show: false, auto: true } : { uuid: d.uuid, name: it?.name ?? "Item", img: it?.img ?? "", show: false });
-  abertos.add(tipo); await salvarItens(cb, tipo, l);
+  await salvarItens(cb, tipo, l); if (!abertaFaixa(tipo, faseOf(cb) === tipo)) await escolher(tipo, true);
 }
 
 /* ================= grupos ================= */
